@@ -1,0 +1,2 @@
+2026-02-22 23:38:16,760 main.py line 500 main INFO: ********** STARTING **********
+2026-02-22 23:38:16,776 itb_util.py line 3954 set_program_name INFO: trying to set program name <CDLL 'libc.so.6', handle 7fb414647c70 at 0x7fb3f8ba6fd0> <ctypes.c_char_Array_16 object at 0x7fb3f8a4cc50> b'ibus-engine-tb'

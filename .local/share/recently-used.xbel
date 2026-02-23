@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xbel version="1.0"
+      xmlns:bookmark="http://www.freedesktop.org/standards/desktop-bookmarks"
+      xmlns:mime="http://www.freedesktop.org/standards/shared-mime-info"
+>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/apple/honeycrisp/file" added="2025-09-04T16:11:28.314143Z" modified="2025-09-04T16:11:28.314172Z" visited="2025-09-04T16:11:28.314143Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/plain"/>
+        <bookmark:applications>
+          <bookmark:application name="org.gnome.Nautilus" exec="&apos;gnome-text-editor %U&apos;" modified="2025-09-04T16:11:28.314170Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/apple/honeycrisp/~Documents" added="2025-09-04T16:27:33.556937Z" modified="2025-09-04T16:27:33.556941Z" visited="2025-09-04T16:27:33.556938Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/plain"/>
+        <bookmark:applications>
+          <bookmark:application name="org.gnome.Nautilus" exec="&apos;gnome-text-editor %U&apos;" modified="2025-09-04T16:27:33.556939Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Ahmed_Almomen_lab_b_ift_383.txt" added="2026-01-26T04:20:32.891084Z" modified="2026-01-26T04:24:19.861398Z" visited="2026-01-26T04:20:32.891084Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/plain"/>
+        <bookmark:applications>
+          <bookmark:application name="org.gnome.Nautilus" exec="&apos;gnome-text-editor %U&apos;" modified="2026-01-26T04:24:19.861396Z" count="2"/>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-01-26T04:24:10.671893Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_01.txt" added="2026-02-09T05:34:36.203104Z" modified="2026-02-09T05:34:36.203300Z" visited="2026-02-09T05:34:36.203105Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/plain"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T05:34:36.203295Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_02.csv" added="2026-02-09T05:34:38.035342Z" modified="2026-02-09T05:34:38.035349Z" visited="2026-02-09T05:34:38.035343Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/csv"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T05:34:38.035346Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_03.csv" added="2026-02-09T05:34:40.079715Z" modified="2026-02-09T05:34:40.079722Z" visited="2026-02-09T05:34:40.079716Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/csv"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T05:34:40.079718Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_04.txt" added="2026-02-09T05:34:41.789998Z" modified="2026-02-09T05:34:41.790006Z" visited="2026-02-09T05:34:41.789999Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/plain"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T05:34:41.790002Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_08.txt" added="2026-02-09T05:34:43.631142Z" modified="2026-02-09T05:34:43.631148Z" visited="2026-02-09T05:34:43.631143Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/plain"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T05:34:43.631146Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_09.txt" added="2026-02-09T05:34:45.575253Z" modified="2026-02-09T05:34:45.575264Z" visited="2026-02-09T05:34:45.575254Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/plain"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T05:34:45.575259Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_10.txt" added="2026-02-09T05:34:47.255287Z" modified="2026-02-09T05:34:47.255293Z" visited="2026-02-09T05:34:47.255288Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="text/plain"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T05:34:47.255290Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Pictures/Screenshots/Screenshot%20From%202026-02-08%2022-56-35.png" added="2026-02-09T05:56:35.287421Z" modified="2026-02-09T05:56:35.287424Z" visited="2026-02-09T05:56:35.287421Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <bookmark:applications>
+          <bookmark:application name="gnome-shell" exec="&apos;gio open %u&apos;" modified="2026-02-09T05:56:35.287421Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_05_aalmome1.sh" added="2026-02-09T06:18:58.660367Z" modified="2026-02-09T06:18:58.660376Z" visited="2026-02-09T06:18:58.660368Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:18:58.660371Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_04_aalmome1.sh" added="2026-02-09T06:19:10.305967Z" modified="2026-02-09T06:19:10.305974Z" visited="2026-02-09T06:19:10.305969Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:19:10.305970Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_03_aalmome1.sh" added="2026-02-09T06:19:15.255699Z" modified="2026-02-09T06:19:15.255709Z" visited="2026-02-09T06:19:15.255701Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:19:15.255704Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_02_aalmome1.sh" added="2026-02-09T06:19:19.609403Z" modified="2026-02-09T06:19:19.609411Z" visited="2026-02-09T06:19:19.609404Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:19:19.609407Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_01_aalmome1.sh" added="2026-02-09T06:19:23.931417Z" modified="2026-02-09T06:19:23.931429Z" visited="2026-02-09T06:19:23.931419Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:19:23.931423Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_06_aalmome1.sh" added="2026-02-09T06:19:28.180800Z" modified="2026-02-09T06:19:28.180912Z" visited="2026-02-09T06:19:28.180801Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:19:28.180804Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_07_aalmome1.sh" added="2026-02-09T06:19:32.730727Z" modified="2026-02-09T06:19:32.731256Z" visited="2026-02-09T06:19:32.730728Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:19:32.730731Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_08_aalmome1.sh" added="2026-02-09T06:19:36.676626Z" modified="2026-02-09T06:19:36.676634Z" visited="2026-02-09T06:19:36.676627Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:19:36.676630Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_09_aalmome1.sh" added="2026-02-09T06:19:40.796788Z" modified="2026-02-09T06:19:40.796795Z" visited="2026-02-09T06:19:40.796789Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:19:40.796791Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+  <bookmark href="file:///home/ahmedalmomen/Downloads/lab_c_task_10_aalmome1.sh" added="2026-02-09T06:19:44.946941Z" modified="2026-02-09T06:19:44.946947Z" visited="2026-02-09T06:19:44.946942Z">
+    <info>
+      <metadata owner="http://freedesktop.org">
+        <mime:mime-type type="application/x-shellscript"/>
+        <bookmark:applications>
+          <bookmark:application name="Firefox" exec="&apos;org.mozilla.firefox %u&apos;" modified="2026-02-09T06:19:44.946944Z" count="1"/>
+        </bookmark:applications>
+      </metadata>
+    </info>
+  </bookmark>
+</xbel>

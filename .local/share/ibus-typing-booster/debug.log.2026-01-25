@@ -1,0 +1,5 @@
+2026-01-25 17:24:32,397 main.py line 500 main INFO: ********** STARTING **********
+2026-01-25 17:24:32,405 itb_util.py line 3954 set_program_name INFO: trying to set program name <CDLL 'libc.so.6', handle 7f117da45c70 at 0x7f1159f62fd0> <ctypes.c_char_Array_16 object at 0x7f1159d44c50> b'ibus-engine-tb'
+2026-01-25 21:25:12,005 main.py line 226 __bus_destroy_cb INFO: finalizing:)
+2026-01-25 21:25:12,033 factory.py line 131 do_destroy INFO: Syncing user database(s)
+2026-01-25 21:25:12,061 factory.py line 131 do_destroy INFO: Syncing user database(s)

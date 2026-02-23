@@ -1,0 +1,2710 @@
+/* eslint-disable no-use-before-define */
+/* global $, ENV, asu_ga */
+
+// TEST-BETA-PROD ONLY- Do not copy to DEV
+const auSubAccountIds = [184, 186, 187, 188, 189, 190, 191, 192, 193, 194];
+// END TEST-BETA-PROD ONLY
+
+// PROD ONLY - Do not copy to DEV, TEST, BETA
+// GA snippet
+function asuGA(i, s, o, g, r, a, m) {
+  // eslint-disable-next-line no-param-reassign
+  i.GoogleAnalyticsObject = r;
+  // eslint-disable-next-line no-param-reassign, no-unused-expressions
+  (i[r] =
+    i[r] ||
+    // eslint-disable-next-line func-names
+    function () {
+      // eslint-disable-next-line prefer-rest-params, no-param-reassign
+      (i[r].q = i[r].q || []).push(arguments);
+      // eslint-disable-next-line no-sequences
+    }),
+    // eslint-disable-next-line no-param-reassign
+    (i[r].l = 1 * new Date());
+  // eslint-disable-next-line no-unused-expressions, prefer-destructuring, no-sequences, no-param-reassign
+  (a = s.createElement(o)), (m = s.getElementsByTagName(o)[0]);
+  // eslint-disable-next-line no-param-reassign
+  a.async = 1;
+  // eslint-disable-next-line no-param-reassign
+  a.src = g;
+  m.parentNode.insertBefore(a, m);
+}
+
+// <!-- Google Tag Manager -->
+((w, d, s, l, i) => {
+  // eslint-disable-next-line no-param-reassign
+  w[l] = w[l] || [];
+  w[l].push({
+    'gtm.start': new Date().getTime(),
+    event: 'gtm.js',
+  });
+  const f = d.getElementsByTagName(s)[0];
+  const j = d.createElement(s);
+  const dl = l !== 'dataLayer' ? `&l=${l}` : '';
+  j.async = true;
+  j.src = `https://www.googletagmanager.com/gtm.js?id=${i}${dl}`;
+  f.parentNode.insertBefore(j, f);
+})(window, document, 'script', 'dataLayer', 'GTM-PQVJ7SL');
+// <!-- End Google Tag Manager -->
+
+window.ALLY_CFG = {
+  baseUrl: 'https://prod.ally.ac',
+  clientId: 5430,
+};
+
+// eslint-disable-next-line no-undef
+$.getScript(`${ALLY_CFG.baseUrl}/integration/canvas/ally.js`);
+// END PROD ONLY - Do not copy to DEV, TEST, BETA
+
+let asuInactiveHidden;
+
+function setCookie(cName, cValue, expireInDays) {
+  const d = new Date();
+  d.setTime(d.getTime() + expireInDays * 24 * 60 * 60 * 1000);
+  const expires = `expires=${d.toUTCString()}`;
+  document.cookie = `${cName}=${cValue};${expires}; path=/`;
+}
+
+function getCookie(cName) {
+  const name = `${cName}=`;
+  const ca = document.cookie.split(';');
+  let i;
+  let c;
+  for (i = 0; i < ca.length; i++) {
+    c = ca[i];
+    while (c.charAt(0) === ' ') {
+      c = c.substring(1);
+    }
+    if (c.indexOf(name) === 0) {
+      return c.substring(name.length, c.length);
+    }
+  }
+  return '';
+}
+
+function asuParseUrlForIdUrlSearchTerm(targetUrl, searchTerm) {
+  let start;
+  let end;
+  if (targetUrl.indexOf(searchTerm) !== -1) {
+    start = targetUrl.indexOf(searchTerm) + searchTerm.length + 1;
+    end = targetUrl.indexOf('/', start + 1);
+    if (end === -1) {
+      // If there is no next slash, the object's Id goes to the end of the string
+      end = targetUrl.length;
+    }
+    return targetUrl.substring(start, end);
+  }
+  return null;
+}
+
+// Usage: first time paginateAPI( url, processCallback, endingCallback )
+// second time paginateAPI( "", processCallback, endingCallback, count, requestObject )
+function paginateAPI(
+  targetURL = '',
+  processCallback,
+  endingCallback = '',
+  count = 0,
+  requestObject
+) {
+  if (targetURL !== '') {
+    $.ajax({
+      url: targetURL,
+      type: 'GET',
+    }).done((data, status, request) => {
+      const newCount = data.length;
+      processCallback(data, newCount);
+      paginateAPI('', processCallback, endingCallback, data.length, request);
+    });
+  } else if (requestObject.getResponseHeader('link').indexOf('next') > 0) {
+    const linkArray = requestObject.getResponseHeader('link').split(',');
+    linkArray.forEach((link) => {
+      if (link.indexOf('next') > 0) {
+        const nextUrl = link.substring(
+          link.indexOf('<') + 1,
+          link.indexOf('>')
+        );
+        $.ajax({
+          url: nextUrl,
+          type: 'GET',
+        }).done((data, status, innerRequest) => {
+          const newCount = count + data.length;
+          processCallback(data, newCount);
+          paginateAPI(
+            '',
+            processCallback,
+            endingCallback,
+            newCount,
+            innerRequest
+          );
+        });
+      }
+    });
+  } else if (endingCallback !== '') {
+    endingCallback(count);
+  }
+}
+
+// The following code can be used to identify when user content has finished loading into Canvas.
+// Similar code is used as part of USU design tools (designtools.usu.edu) hence the 2 at the end of the functions
+// You are free to use this however you would like - Kenneth Larsen, Utah State University
+// If any of these elements exist, we will watch for page content in them to load
+const klContentWrappersArray2 = [
+  '#course_home_content', // Course Front Page
+  '#wiki_page_show', // Content page
+  '#discussion_topic', // Discussions page
+  '#course_syllabus', // Syllabus page
+  '#assignment_show', // Assignments page
+  '#wiki_page_revisions',
+  '#people-options', // People page
+  '#gradebook_wrapper', // Gradebook (instructor)
+];
+
+// Check to see if the page content has loaded yet
+function klPageContentCheck2(klContentWrapperElement2, checkCount) {
+  let contentLoaded = false;
+  // Content Pages
+  if (
+    $('.show-content').length > 0 &&
+    $('.show-content').children().length > 0
+  ) {
+    contentLoaded = true;
+    // Discussions
+  } else if (
+    $('#discussion_topic').length > 0 &&
+    $('.user_content').text().length > 0
+  ) {
+    contentLoaded = true;
+    // Assignment (Teacher View)
+  } else if ($('#assignment_show .teacher-version').length > 0) {
+    contentLoaded = true;
+  } else if ($('#assignment_show .student-version').length > 0) {
+    contentLoaded = true;
+  } else if ($('#course_syllabus').length > 0) {
+    contentLoaded = true;
+  } else if (
+    $('div[data-view="users"]').length > 0 &&
+    document.querySelector('tbody.collectionViewItems') !== null
+  ) {
+    // people page
+    contentLoaded = true;
+  } else if (
+    $("#gradebook-grid-wrapper div[id*='assignment_'].assignment button")
+      .length > 0
+  ) {
+    // gradebook
+    contentLoaded = true;
+  }
+
+  if (contentLoaded) {
+    console.log('Content has loaded');
+    klAfterContentLoaded2();
+  } else if (checkCount < 50) {
+    const newCheckCount = checkCount + 1;
+    setTimeout(() => {
+      console.log(
+        `Still no content, check again (${klContentWrapperElement2})`
+      );
+      klPageContentCheck2(klContentWrapperElement2, newCheckCount);
+    }, 100);
+  }
+}
+
+function klAfterContentLoaded2() {
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Community%20of%20Care%3A%20Coming%20to%20Campus']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Community%20of%20Care%3A%20Coming%20to%20Campus&name=${ENV.current_user.display_name}`
+  );
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Devils%204%20Devils%3A%20Creating%20a%20Safe%20and%20Caring%20Community']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Devils%204%20Devils%3A%20Creating%20a%20Safe%20and%20Caring%20Community&name=${ENV.current_user.display_name}`
+  );
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate/certificate.html#name=${ENV.current_user.display_name}`
+  );
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate-sustainability/certificate.html']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate-sustainability/certificate.html#name=${ENV.current_user.display_name}`
+  );
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Free%20Speech%20at%20ASU']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Free%20Speech%20at%20ASU&name=${ENV.current_user.display_name}`
+  );
+
+  // Check if we're on the People page
+  if (
+    document.querySelector('tbody.collectionViewItems') !== null &&
+    window.location.toString().indexOf('users') > 0
+  ) {
+    asuInactivePeoplePage();
+    asuAddAlertForManualAdds();
+  }
+}
+
+function asuInactivePeoplePage() {
+  // Check if an "asuInactiveHidden" cookie exists, if not set it to false (visible)
+  asuCheckInactiveCookie();
+
+  // Create a mutationObserver that will hide inactive users when the roster list changes (if that is the current user's preference)
+  const mutationObserver = new MutationObserver((mutations) => {
+    mutations.forEach(() => {
+      // console.log(mutation);
+      // If inactive users should be hidden, hide them
+      if (asuInactiveHidden) {
+        asuToggleInactiveUsers();
+      }
+    });
+
+    // Add click event to deactivateUser to catch new rows added to the table
+    let i;
+    for (
+      i = 0;
+      i <
+      $("td.right div.admin-links ul li a[data-event='deactivateUser']").length;
+      i++
+    ) {
+      // Check if we've set a custom attribute on the link to store its state
+      if (
+        !$("td.right div.admin-links ul li a[data-event='deactivateUser']")[
+          i
+        ].getAttribute('hasASUClickEvent')
+      ) {
+        // If not, then add the attribute and the event listener
+        $("td.right div.admin-links ul li a[data-event='deactivateUser']")[
+          i
+        ].setAttribute('hasASUClickEvent', true);
+        $("td.right div.admin-links ul li a[data-event='deactivateUser']")[
+          i
+        ].addEventListener('click', () => {
+          asuCheckForNewlyDeactivatedUsers(0);
+        });
+        console.log(
+          `adding event to ${
+            $("td.right div.admin-links ul li a[data-event='deactivateUser']")[
+              i
+            ].parentElement.parentElement.parentElement.parentElement
+              .parentElement.id
+          }`
+        );
+      }
+    }
+  });
+
+  const tableBody = document.querySelector('tbody.collectionViewItems');
+
+  const config = { attributes: true, childList: true, characterData: true };
+
+  mutationObserver.observe(tableBody, config);
+
+  asuInjectHideShowButtonSelectorPosition(
+    "a[aria-label='Add People']",
+    'before'
+  );
+  asuToggleInactiveUsers();
+  asuFixAlternatingRowStyling();
+  asuAttachInactiveClickHandler();
+
+  $("td.right div.admin-links ul li a[data-event='deactivateUser']").click(
+    () => {
+      asuCheckForNewlyDeactivatedUsers(0);
+    }
+  );
+}
+
+function asuCheckInactiveCookie() {
+  asuInactiveHidden = getCookie('asuInactiveHidden');
+  if (asuInactiveHidden === '') {
+    // Default to false
+    asuInactiveHidden = false;
+    setCookie('asuInactiveHidden', asuInactiveHidden, 365);
+  } else {
+    // Convert from string to boolean
+    asuInactiveHidden = asuInactiveHidden === 'true';
+  }
+}
+
+let acceptButtonHitCount = 0;
+
+async function asuAddAlertForManualAdds() {
+  const currentCourseId = asuParseUrlForIdUrlSearchTerm(
+    window.location.href,
+    'courses'
+  );
+
+  let courseCode;
+
+  await $.get(`/api/v1/courses/${currentCourseId}`, (data2) => {
+    courseCode = data2.course_code.toUpperCase();
+  });
+
+  if (courseCode !== undefined && courseCode !== null) {
+    // add student alert for manual adds only for live courses and on first click
+    if (
+      !courseCode.startsWith('DEV') &&
+      !courseCode.startsWith('TRN') &&
+      !courseCode.startsWith('ORG') &&
+      !courseCode.startsWith('AU')
+    ) {
+      $('#addUsers').click(() => {
+        if (acceptButtonHitCount < 1) {
+          asuCreateAlertDiv(0);
+        }
+      });
+    }
+  }
+}
+
+function asuCreateAlertDiv(checkCount) {
+  const divElement = document.getElementsByClassName('addpeople__peoplesearch');
+  if (divElement.length === 0) {
+    if (checkCount < 25) {
+      const newCheckCount = checkCount + 1;
+      setTimeout(() => {
+        asuCreateAlertDiv(newCheckCount);
+      }, 100);
+    }
+  } else {
+    const alertDiv = document.createElement('div');
+    alertDiv.id = 'alert-content';
+    alertDiv.className = 'custom-asu-alert-content';
+    alertDiv.innerHTML =
+      '<p style="color: whitesmoke; padding: 35px; text-align: center; font-weight: 600">The enrollment for this course is programmatically managed and any students you add manually will be removed nightly. Please reach out to the Help Center if you would like to enroll the student permanently in this course.</p>';
+    const acceptButton = document.createElement('button');
+    acceptButton.id = 'accept-button';
+    acceptButton.innerText = 'Accept';
+    acceptButton.className = 'custom-asu-btn-maroon';
+    acceptButton.style.cssText = 'position: absolute; left: 41%;';
+    alertDiv.appendChild(acceptButton);
+
+    document.body.appendChild(alertDiv);
+    document
+      .getElementById('accept-button')
+      .addEventListener('click', asuRemoveDivElement);
+
+    $(divElement).append(alertDiv);
+  }
+}
+
+function asuRemoveDivElement() {
+  $('#alert-content').remove();
+  acceptButtonHitCount += 1;
+}
+
+function asuCheckForNewlyDeactivatedUsers(checkCount) {
+  if (!asuInactiveHidden) {
+    console.log('Inactive users should be visible, exiting.');
+    return;
+  }
+
+  let newlyDeactivated = false;
+
+  if (
+    $("span[title='This user is currently not able to access the course']")
+      .parent()
+      .parent()
+      .has(':visible').length > 0
+  ) {
+    newlyDeactivated = true;
+  }
+
+  if (newlyDeactivated) {
+    asuToggleInactiveUsers();
+    asuFixAlternatingRowStyling();
+  } else if (checkCount < 50) {
+    const newCheckCount = checkCount + 1;
+    setTimeout(() => {
+      asuCheckForNewlyDeactivatedUsers(newCheckCount);
+    }, 100);
+  }
+}
+
+function asuInjectHideShowButtonSelectorPosition(selector, position) {
+  const showHtml =
+    "<a href='#' class='btn btn-primary pull-right' id='asuToggleInactiveButton' role='button' title='Show Inactive' aria-label='Show Inactive' asuStatus='hidden' style='margin-left: 5px; z-index: 1;'>Show Inactive</a>";
+  const hideHtml =
+    "<a href='#' class='btn btn-primary pull-right' id='asuToggleInactiveButton' role='button' title='Hide Inactive' aria-label='Hide Inactive' asuStatus='visible' style='margin-left: 5px; z-index: 1;'>Hide Inactive</a>";
+
+  if (asuInactiveHidden) {
+    if (position === 'before') {
+      $(selector).before(showHtml);
+    } else {
+      $(selector).after(showHtml);
+    }
+  } else if (position === 'before') {
+    $(selector).before(hideHtml);
+  } else {
+    $(selector).after(hideHtml);
+  }
+}
+
+function asuToggleInactiveUsers() {
+  if (asuInactiveHidden) {
+    $("span[title='This user is currently not able to access the course']")
+      .parent()
+      .parent()
+      .hide();
+  } else {
+    $("span[title='This user is currently not able to access the course']")
+      .parent()
+      .parent()
+      .show();
+  }
+}
+
+function asuFixAlternatingRowStyling() {
+  $('.ic-Table.ic-Table--striped tbody tr').css('background', 'inherit');
+  $('.ic-Table.ic-Table--striped tbody tr:visible:odd').css(
+    'background',
+    '#F5F5F5'
+  );
+  $('.ic-Table.ic-Table--striped tbody tr').hover(
+    function asuTableEvenHoverHandler(e) {
+      $(this).css(
+        'background-color',
+        e.type === 'mouseenter' ? '#E5F2F8' : 'inherit'
+      );
+    }
+  );
+  $('.ic-Table.ic-Table--striped tbody tr:visible:odd').hover(
+    function asuTableOddHoverHandler(e) {
+      $(this).css(
+        'background-color',
+        e.type === 'mouseenter' ? '#E5F2F8' : '#F5F5F5'
+      );
+    }
+  );
+}
+
+function asuAttachInactiveClickHandler() {
+  $('#asuToggleInactiveButton').click(function asuToggleInactiveHandler() {
+    if ($(this).attr('asuStatus') === 'visible') {
+      $(this)
+        .attr('asuStatus', 'hidden')
+        .html('Show Inactive')
+        .attr('aria-label', 'Show Inactive')
+        .attr('title', 'Show Inactive');
+      asuInactiveHidden = true;
+    } else {
+      $(this)
+        .attr('asuStatus', 'visible')
+        .html('Hide Inactive')
+        .attr('aria-label', 'Hide Inactive')
+        .attr('title', 'Hide Inactive');
+      asuInactiveHidden = false;
+    }
+    asuToggleInactiveUsers();
+    asuFixAlternatingRowStyling();
+    // Update the cookie to their current preference
+    setCookie('asuInactiveHidden', asuInactiveHidden, 365);
+  });
+}
+
+const asuWhatAccountAreWeIn = new Promise((resolve) => {
+  if (/courses\/\d+\/settings/.test(window.location.href)) {
+    // Make API call for course and pull account id
+    const currentCourseId = asuParseUrlForIdUrlSearchTerm(
+      window.location.href,
+      'courses'
+    );
+    $.get(`/api/v1/courses/${currentCourseId}`, (data) => {
+      console.log(`Retrieved account id: ${data.account_id}`);
+      resolve(data.account_id);
+    });
+  } else if (/accounts\/\d+/.test(window.location.href)) {
+    // just pull account ID # from URL
+    resolve(asuParseUrlForIdUrlSearchTerm(window.location.href, 'accounts'));
+  }
+});
+
+function asuFilterTermsBasedOnLocation() {
+  let asuCurrentAccountId;
+  let asuSubAccount = 'ASU'; // default to ASU because that is most likely
+  const auSubAccounts = auSubAccountIds;
+
+  if (/accounts\/\d+($|\/$|\/?\?)/.test(window.location.href)) {
+    asuDisableTermFilter();
+  }
+
+  // Decide whether we want ASU or AU terms
+  asuWhatAccountAreWeIn.then(
+    (result) => {
+      asuCurrentAccountId = result;
+      console.log(`We're in account: ${asuCurrentAccountId}`);
+      if (auSubAccounts.indexOf(parseInt(asuCurrentAccountId, 10)) > -1) {
+        console.log('Changing asuSubAccount to AU');
+        asuSubAccount = 'AU';
+      }
+      const termUrl = '/api/v1/accounts/1/terms?per_page=100';
+      const termArray = [];
+
+      const asuBuildTermFilteringList = (data) => {
+        // Parse data to store relevant term details in an array
+        data.enrollment_terms.forEach((term) => {
+          if (term.name.indexOf('AU') === -1) {
+            termArray[term.id] = 'ASU';
+          } else {
+            termArray[term.id] = 'AU';
+          }
+        });
+      };
+
+      const asuCleanTermsOnPage = () => {
+        if (/accounts\/\d+($|\/$|\/?\?)/.test(window.location.href)) {
+          // For accounts > Courses, catch with mutation observer and destroy/hide unwanted spans when they're created
+          // -----------------Accounts > Courses-----------------//
+          const mutationObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+              let currentSpanVal;
+              if (
+                mutation.target.dir === 'ltr' ||
+                mutation.target.localName === 'ul'
+              ) {
+                if (mutation.addedNodes.length !== 0) {
+                  $(
+                    "span[dir='ltr'] > span > span > span > div > ul > li > span > div > ul > li > span"
+                  ).each(function asuShowHideTermAccountHandler() {
+                    const spanItem = $(this);
+                    const termHeading =
+                      spanItem[0].parentNode.parentNode.parentNode.firstChild
+                        .innerText;
+
+                    // lets make sure we are only modifing the correct term list (added since we can no longer rely on list selection path above)
+                    if (
+                      termHeading === 'Show courses from' ||
+                      termHeading === 'Active Terms' ||
+                      termHeading === 'Future Terms' ||
+                      termHeading === 'Past Terms'
+                    ) {
+                      currentSpanVal = $(this).attr('value');
+                      console.log(
+                        `value = ${currentSpanVal}; - asuSubAccount: [${asuSubAccount}] and termArray[this.value]: ${termArray[currentSpanVal]}`
+                      );
+                      if (
+                        asuSubAccount === termArray[currentSpanVal] ||
+                        currentSpanVal === '1'
+                      ) {
+                        $(this).show();
+                      } else {
+                        $(this).hide();
+                      }
+
+                      if ($(this).parent().id === 'asuLoading') {
+                        $(this).parent().remove();
+                      }
+                    }
+                  });
+                }
+              }
+            });
+          });
+
+          mutationObserver.observe(document.body, {
+            attributes: false,
+            characterData: false,
+            childList: true,
+            subtree: true,
+            attributeOldValue: false,
+            characterDataOldValue: false,
+          });
+
+          asuEnableTermFilter();
+          // -------------end Accounts > Courses----------------- //
+        } else if (/courses\/\d+\/settings/.test(window.location.href)) {
+          // -------------Course > Settings----------------- //
+          console.log(
+            `There are ${
+              $('select#course_enrollment_term_id option').length
+            } term options on page load`
+          );
+          let currentOptVal;
+          $('select#course_enrollment_term_id option').each(
+            function asuShowHideTermCourseHandler() {
+              currentOptVal = $(this).attr('value');
+              console.log(
+                `value = ${currentOptVal}; - asuSubAccount: [${asuSubAccount}] and termArray[this.value]: ${termArray[currentOptVal]}`
+              );
+              if (
+                asuSubAccount === termArray[currentOptVal] ||
+                currentOptVal === '1'
+              ) {
+                $(this).show();
+              } else {
+                $(this).hide();
+              }
+            }
+          );
+          // ---------end Course > Settings----------------- //
+        } else {
+          console.log('Unknown page detected, ignoring term filters');
+        }
+      };
+
+      paginateAPI(termUrl, asuBuildTermFilteringList, asuCleanTermsOnPage);
+    },
+    (error) => {
+      asuCurrentAccountId = error;
+    }
+  );
+}
+
+function asuDisableTermFilter() {
+  const filterBox = {};
+  filterBox.obj = $('#termFilter')
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent();
+  filterBox.top = filterBox.obj.offset().top;
+  filterBox.left = filterBox.obj.offset().left;
+  filterBox.width = filterBox.obj.css('width');
+  filterBox.height = filterBox.obj.css('height');
+  filterBox.paddingLeft = filterBox.obj.css('padding-left');
+
+  $("<div id='loadingFilterBlocker'></div>").prependTo('#wrapper');
+  $('#loadingFilterBlocker')
+    .css('position', 'absolute')
+    .css('background', 'rgba(0, 0, 0, 0.05)')
+    .css('top', filterBox.top)
+    .css('left', filterBox.left)
+    .css('width', filterBox.width)
+    .css('height', filterBox.height)
+    .css('margin-left', filterBox.paddingLeft)
+    .css('border-radius', 'var(--qBMHb-borderRadius)')
+    .css('z-index', 11);
+}
+
+function asuEnableTermFilter() {
+  $('#loadingFilterBlocker').remove();
+}
+
+// asuCheckGlobalNav and asuUpdateGlobalNav (and the event handler added to .mobile-header-hamburger
+// in the window.addEventListener('load') function) are to handle Canvas' mobile responsive global nav menu
+function asuCheckGlobalNav(asuCount, asuCustomHelpMenuDetails) {
+  if (asuCount >= 20) {
+    console.log('asuCheckGlobalNav loop stuck, exiting');
+    return;
+  }
+  const newCount = asuCount + 1;
+
+  setTimeout(() => {
+    if ($("div[aria-label='Global Navigation'][role='dialog']").length === 1) {
+      console.log(`Global Nav element found! asuCount: ${newCount}`);
+      asuUpdateGlobalNav(asuCustomHelpMenuDetails);
+    } else {
+      asuCheckGlobalNav(newCount, asuCustomHelpMenuDetails);
+    }
+  }, 100);
+}
+
+function asuUpdateGlobalNav(asuCustomHelpMenuDetails) {
+  const globalNavUl = $(
+    "div[aria-label='Global Navigation'][role='dialog'] div span ul"
+  );
+  // Check if ASU Header Links exist before adding it
+  if ($('#mobile-custom-asu-header-links').length < 1) {
+    globalNavUl.parent().append(asuCustomHelpMenuDetails);
+    // Also add Accessibility Custom Global Nav Item
+    // Grab the "Dashboard" link's parent li
+    const globalDashboardItem = $(
+      "div[aria-label='Global Navigation'][role='dialog'] li span"
+    )
+      // eslint-disable-next-line func-names
+      .filter(function () {
+        return $(this).html() === 'Dashboard';
+      })
+      .parents('li');
+    // Clone the Dashboard li and add the clone to the end of the list
+    globalDashboardItem.clone().appendTo(globalDashboardItem.parent());
+    // Grab a reference to the new li
+    const globalAccessibilityItem = $(
+      "div[aria-label='Global Navigation'][role='dialog'] li span"
+    )
+      // eslint-disable-next-line func-names
+      .filter(function () {
+        return $(this).html() === 'Dashboard';
+      })
+      .last()
+      .parents('li');
+    // Update the text from Dashboard to Accessibility
+    globalAccessibilityItem
+      .find("span:contains('Dashboard')")
+      .last()
+      .html('Accessibility');
+    // Replace the default dashboard SVG with our custom Accessibility one
+    globalAccessibilityItem
+      .find('svg')
+      .parent()
+      .append(
+        '<svg version="1.1" class="ic-icon-svg" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 26 26" style="enable-background:new 0 0 26 26; width: 2em; height: 2em;" xml:space="preserve"><g><path class="st0" d="M20.5,8.5c-4.5,1.7-9.8,1.7-15,0L4.6,8.3v3.2L5,11.7l0.1,0.1c1.7,0.5,3.2,0.9,4.6,1.1v9.7h3.4v-5h0.5v5h3.3 v-9.8c1.3-0.2,2.6-0.5,4.1-1.1l0.4-0.2V8.3L20.5,8.5z M15.5,11.6v9.7h-0.7v-5h-3.1v5H11v-9.7l-0.6,0c-1.3-0.2-2.7-0.5-4.4-1V10 c2.5,0.7,4.9,1.1,7.2,1.1c2.3,0,4.6-0.4,6.9-1.1v0.8c-1.2,0.4-2.5,0.7-4,0.9H15.5z"/><path class="st0" d="M13.2,9.1c1.6,0,2.8-1.3,2.8-2.9s-1.3-2.9-2.8-2.9c-1.6,0-2.9,1.3-2.9,2.9S11.6,9.1,13.2,9.1z M13.2,7.9 c-0.9,0-1.6-0.6-1.6-1.6c0-0.9,0.7-1.5,1.6-1.5c0.8,0,1.5,0.6,1.5,1.5C14.7,7.2,14.1,7.9,13.2,7.9z"/><path class="st0" d="M13,0.6C6.2,0.6,0.6,6.2,0.6,13S6.2,25.3,13,25.3S25.3,19.8,25.3,13S19.8,0.6,13,0.6z M13,24.1 c-6.1,0-11-5-11-11.1s5-11,11-11s11.1,5,11.1,11S19.1,24.1,13,24.1z"/></g></svg>'
+      );
+    // Remove the original SVG
+    globalAccessibilityItem.find('svg').first().remove();
+    // Update the link to point to the right place
+    globalAccessibilityItem.find('a')[0].href =
+      'https://accessibility.asu.edu/canvas-student-accessibility';
+    // Give the li an ID so that AU can easily hide it
+    globalAccessibilityItem.attr(
+      'id',
+      'asu_global_nav_mobile_accessibility_link'
+    );
+  }
+}
+
+// disable editing of course code and course name and add edit button to route edits to the CES history tab
+function addCourseSettingLinks() {
+  if (
+    !/courses\/\d+\/settings/.test(window.location.href) &&
+    !/courses\/\d+\/details/.test(window.location.href)
+  )
+    return;
+
+  asuWhatAccountAreWeIn.then((result) => {
+    const asuCurrentAccountId = result;
+    if (auSubAccountIds.indexOf(parseInt(asuCurrentAccountId, 10)) > -1) {
+      return;
+    } else {
+      const basePath = 'https://ces.apps.asu.edu';
+      const courseElements = [
+        { id: 'course_name', ariaLabel: 'Edit Course Name' },
+        { id: 'course_course_code', ariaLabel: 'Edit Course Code' },
+        { id: 'course_sis_source_id', ariaLabel: '' }, // Added to keep consistency in disabling inputs
+      ];
+
+      courseElements.forEach(({ id }) => {
+        document.getElementById(id).disabled = true;
+      });
+
+      courseElements.slice(0, 2).forEach(({ id, ariaLabel }) => {
+        const courseInput = document.getElementById(id);
+        const sisIdValue =
+          document.getElementById('course_sis_source_id').value ||
+          document.getElementById('course_sis_source_id').textContent.trim();
+        const encodedSisIdValue = encodeURIComponent(sisIdValue);
+        const link = document.createElement('a');
+
+        link.href = `${basePath}/history?editCourse=true&course_sis_id=${encodedSisIdValue}`;
+        link.target = '_blank';
+        link.innerText = ariaLabel;
+        link.style.paddingLeft = '5px';
+
+        if (ariaLabel) {
+          link.setAttribute('aria-label', ariaLabel);
+        }
+
+        courseInput.parentNode.insertBefore(link, courseInput.nextSibling);
+      });
+    }
+  });
+}
+
+window.addEventListener(
+  'message',
+  (event) => {
+    const trustedOrigins = ['https://credid.asu.edu'];
+
+    if (!trustedOrigins.includes(event.origin) || !event.data.subject) {
+      // Exit if the message is not from a trusted domain or if subject is absent
+      return;
+    }
+
+    const messageData = event.data.subject;
+
+    // Refresh the page if credId LTI sends expected message data
+    if (messageData === 'lti.refreshAfterSubmission.credId') {
+      window.location.reload();
+    }
+  },
+  false
+);
+
+window.addEventListener('load', () => {
+  // PROD ONLY - Do not copy to DEV/TEST/BETA
+  // MediaPlus analytics
+  const elementsWithUrl = document.querySelectorAll('[src],[href]');
+  const regex = /mediaplus.*\.asu\.edu\/lti\/embedded/;
+
+  elementsWithUrl.forEach((element) => {
+    const mediaplusUrl = element.src || element.href;
+    if (mediaplusUrl && mediaplusUrl.match(regex)) {
+      if (element.src) {
+        // eslint-disable-next-line no-param-reassign
+        element.src += `&userId=${window.ENV.current_user_id}`;
+      } else {
+        // eslint-disable-next-line no-param-reassign
+        element.href += `&userId=${window.ENV.current_user_id}`;
+      }
+    }
+  });
+
+  addCourseSettingLinks();
+
+  // Initialize GA
+  asuGA(
+    window,
+    document,
+    'script',
+    'https://www.google-analytics.com/analytics.js',
+    'asu_ga'
+  );
+
+  // Fetch Canvas userId and pass with pageiew to GA
+  const USER_ID = ENV.current_user_id;
+  asu_ga('create', 'UA-42798992-21', 'auto', {
+    userId: USER_ID,
+  });
+  asu_ga('send', 'pageview');
+
+  // Check if we are on a redirect page
+  if ($('#custom_url').length > 0 && $('#custom_new_tab').length === 0) {
+    // Check if the redirect link is pointing to a Canvas domain
+    if (
+      $('#custom_url')
+        .val()
+        .substring(0, $('#custom_url').val().indexOf('/', 9)) ===
+        'https://asu.instructure.com' ||
+      $('#custom_url')
+        .val()
+        .substring(0, $('#custom_url').val().indexOf('/', 9)) ===
+        'https://canvas.asu.edu'
+    ) {
+      // Compare custom_url against current domain
+      if (
+        window.location
+          .toString()
+          .substring(0, window.location.toString().indexOf('/', 9)) !==
+        $('#custom_url')
+          .val()
+          .substring(0, $('#custom_url').val().indexOf('/', 9))
+      ) {
+        // Domains do not match, update custom_url to reflect current domain and set window.location to redirect
+        window.location =
+          window.location
+            .toString()
+            .substring(0, window.location.toString().indexOf('/', 9)) +
+          $('#custom_url')
+            .val()
+            .substring($('#custom_url').val().indexOf('/', 9));
+      }
+    }
+  }
+  // END PROD ONLY - Do not copy to DEV/TEST/BETA
+
+  // Check if we're on a course page
+  if (window.location.pathname.substring(1, 8) === 'courses') {
+    // Add hidden eye icon to course navigation link
+    const courseNavLinks = document.querySelectorAll('#section-tabs > li > a');
+    if (courseNavLinks) {
+      courseNavLinks.forEach((el) => {
+        switch (el.innerText) {
+          // Ally Dashboard
+          case 'Ally Dashboard':
+            // eslint-disable-next-line no-param-reassign
+            el.title = 'Not visible to students';
+            // eslint-disable-next-line no-param-reassign
+            el.innerHTML = `${el.innerHTML}<i class="nav-icon icon-off" aria-hidden="true" role="presentation"></i>`;
+            break;
+
+          // Rubrics
+          case 'Rubrics':
+            if (el.childElementCount === 0) {
+              // eslint-disable-next-line no-param-reassign
+              el.title = 'Not visible to students';
+              // eslint-disable-next-line no-param-reassign
+              el.innerHTML = `${el.innerHTML}<i class="nav-icon icon-off" aria-hidden="true" role="presentation"></i>`;
+            }
+            break;
+
+          // Item Banks
+          case 'Item Banks':
+            if (el.childElementCount === 0) {
+              // eslint-disable-next-line no-param-reassign
+              el.title = 'Not visible to students';
+              // eslint-disable-next-line no-param-reassign
+              el.innerHTML = `${el.innerHTML}<i class="nav-icon icon-off" aria-hidden="true" role="presentation"></i>`;
+            }
+            break;
+
+          default:
+            break;
+        }
+      });
+    }
+  }
+
+  // Check if we're on the course settings page
+  if (window.location.pathname.endsWith('settings')) {
+    // remove delete icon for CES managed sections from section tab
+    const courseSections = document.getElementsByClassName('users_count');
+
+    if (courseSections && courseSections.length > 0) {
+      for (let i = 0; i < courseSections.length; i++) {
+        const sectionElement = courseSections[i];
+
+        if (sectionElement.innerText.includes('_section_')) {
+          const { nextElementSibling } = sectionElement;
+
+          if (nextElementSibling && nextElementSibling.children) {
+            const nextElementSiblingChildren = nextElementSibling.children;
+
+            if (nextElementSiblingChildren.length === 2) {
+              nextElementSiblingChildren[1].remove();
+            } else if (nextElementSiblingChildren.length === 1) {
+              nextElementSiblingChildren[0].remove();
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Check if we're on a page with term selection
+  if (
+    /accounts\/\d+($|\/$|\/?\?)/.test(window.location.href) ||
+    /courses\/\d+\/settings/.test(window.location.href)
+  ) {
+    asuFilterTermsBasedOnLocation();
+  }
+
+  // Check if we're on a course wiki page
+  if (
+    /^\/courses\/\d+\/pages/.test(window.location.pathname) ||
+    /^\/courses\/\d+\/wiki/.test(window.location.pathname)
+  ) {
+    if (window.location.origin === 'https://asu.instructure.com') {
+      // Use MutationObserver to wait for iframe
+      const observer = new MutationObserver(() => {
+        const hasAimlIframe = Array.from(
+          document.getElementsByTagName('iframe')
+        ).some((iframe) => iframe.src && iframe.src.includes('.aiml.asu.edu'));
+        if (hasAimlIframe) {
+          observer.disconnect(); // Stop observing after redirect
+          window.location = `https://canvas.asu.edu${window.location.pathname}`;
+        }
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+
+      // check immediately in case iframe is already present
+      const hasAimlIframe = Array.from(
+        document.getElementsByTagName('iframe')
+      ).some((iframe) => iframe.src && iframe.src.includes('.aiml.asu.edu'));
+      if (hasAimlIframe) {
+        window.location = `https://canvas.asu.edu${window.location.pathname}`;
+        observer.disconnect();
+      }
+    }
+  }
+
+  // Build list of just menu details and send it to the mobile header click event
+  const asuHeaderListItems =
+    '<li><a class="Button" href="http://www.asu.edu/">ASU Home</a></li><li><a class="Button" href="https://my.asu.edu/">My ASU</a></li><li><a class="Button" href="http://www.asu.edu/colleges/">Colleges &amp; Schools</a></li><li><a class="Button" href="http://www.asu.edu/map/">Map &amp; Locations</a></li><li><a class="Button" href="https://www.asu.edu/about/contact">Contact Us</a></li>';
+  $('.mobile-header-hamburger').click(() => {
+    asuCheckGlobalNav(
+      0,
+      `<ul id="mobile-custom-asu-header-links">${asuHeaderListItems}</ul>`
+    );
+  });
+
+  // Add header links to every page except speed grader and students' view of their assignment submissions or quiz submissions
+  if (
+    window.location.href.indexOf('submissions') === -1 &&
+    window.location.href.indexOf('speed_grader') === -1 &&
+    $('#speedgrader_iframe').length === 0 &&
+    window.location.href.indexOf('headless') === -1
+  ) {
+    $(
+      `<div class="asuHeaderPadding"></div><div id="custom-asu-header-links"><ul id="custom-asu-header-ul">${asuHeaderListItems}</ul></div>`
+    ).prependTo('#wrapper');
+  }
+
+  // Remove harmful things
+  $(
+    'div.public_options > input#course_indexed, div.public_options > label[for="course_indexed"]'
+  ).remove();
+  $('div.public_options > input[name="course[indexed]"]').val('0');
+
+  // Update 404 pages to refer students to the Help Center
+  $('a.submit_error_link').before(
+    `If you reached this page through a link in your course, please reach out to your instructor and include this URL ( ${window.location} ), as well as what you were attempting to do when you encountered the error.<br><br>If this link was not in a course, or you need assistance with other issues, please reach out to the ASU Help Center at 1-855-278-5080.`
+  );
+  $('a.submit_error_link, #submit_error_form').remove();
+
+  // Identify which page we are on and when the content has loaded
+  for (let i = 0; i <= klContentWrappersArray2.length; i++) {
+    if ($(klContentWrappersArray2[i]).length > 0) {
+      klPageContentCheck2(klContentWrappersArray2[i], 0);
+      break;
+    }
+  }
+
+  // ASU CUSTOM UNITY STYLES
+
+  /* For Custom Accordion and Custom Tabbed Panes */
+  // allow only one accordion to render
+  const acc = document.getElementsByClassName('custom-asu-card-header');
+  const panel = document.getElementsByClassName('custom-asu-card-body');
+
+  for (let i = 0; i < acc.length; i++) {
+    // eslint-disable-next-line func-names
+    acc[i].onclick = function (event) {
+      event.preventDefault();
+      const setClasses = !this.classList.contains('active');
+      const iTag = this.parentNode.parentNode.getElementsByTagName('i');
+      asuSetClass(acc, 'active', 'remove');
+      asuSetClass(panel, 'show', 'remove');
+      asuSetClass(iTag, 'icon-arrow-open-up', 'remove');
+      asuSetClass(iTag, 'icon-arrow-open-down', 'add');
+
+      if (setClasses) {
+        this.classList.toggle('active');
+        this.nextElementSibling.classList.toggle('show');
+        $(this)
+          .find('i')
+          .removeClass('icon-arrow-open-down')
+          .addClass('icon-arrow-open-up');
+      }
+    };
+  }
+
+  function asuSetClass(els, className, fnName) {
+    for (let i = 0; i < els.length; i++) {
+      els[i].classList[fnName](className);
+    }
+  }
+
+  // tabbed panes remove active class on item change
+  $('.custom-asu-nav-item').click((e) => {
+    e.preventDefault();
+    $('.active').removeClass('active');
+    $(e.currentTarget).addClass('active');
+    const tabContentId = e.currentTarget.hash;
+    $(tabContentId).addClass('show active');
+  });
+
+  /* End Custom Accordion and Tabbed Panes */
+
+  function asuCreateCopyButton(highlightDiv) {
+    const button = document.createElement('button');
+    button.className = 'copy-code-button';
+    button.type = 'button';
+    button.innerText = 'Copy';
+    button.style =
+      'float: right; height: 35px; border-radius: 5px; color: #525252; border: solid 1px #c7cdd1;';
+    button.addEventListener('click', () =>
+      asuCopyCodeToClipboard(button, highlightDiv)
+    );
+    asuAddCopyButtonToDom(button, highlightDiv);
+  }
+
+  async function asuCopyCodeToClipboard(button, highlightDiv) {
+    const codeToCopy = highlightDiv.querySelector(':last-child').innerText;
+    let result;
+    try {
+      result = await navigator.permissions.query({ name: 'clipboard-write' });
+      if (result.state === 'granted' || result.state === 'prompt') {
+        await navigator.clipboard.writeText(codeToCopy);
+      } else {
+        asuCopyCodeBlockExecCommand(codeToCopy, highlightDiv);
+      }
+    } catch (_) {
+      asuCopyCodeBlockExecCommand(codeToCopy, highlightDiv);
+    } finally {
+      asuCodeWasCopied(button);
+    }
+  }
+
+  function asuCopyCodeBlockExecCommand(codeToCopy, highlightDiv) {
+    const textArea = document.createElement('textArea');
+    textArea.contentEditable = 'true';
+    textArea.readOnly = 'false';
+    textArea.className = 'copyable-text-area';
+    textArea.value = codeToCopy;
+    highlightDiv.insertBefore(textArea, highlightDiv.firstChild);
+    const range = document.createRange();
+    range.selectNodeContents(textArea);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    textArea.setSelectionRange(0, 999999);
+    document.execCommand('copy');
+    highlightDiv.removeChild(textArea);
+  }
+
+  // change copy text to copied when button is copied
+  function asuCodeWasCopied(button) {
+    button.blur();
+    // eslint-disable-next-line no-param-reassign
+    button.innerText = 'Copied!';
+    // eslint-disable-next-line func-names
+    setTimeout(function () {
+      // eslint-disable-next-line no-param-reassign
+      button.innerText = 'Copy';
+    }, 2000);
+  }
+
+  // add copy button to the dom
+  function asuAddCopyButtonToDom(button, highlightDiv) {
+    highlightDiv.insertBefore(button, highlightDiv.firstChild);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'highlight-wrapper';
+    highlightDiv.parentNode.insertBefore(wrapper, highlightDiv);
+    wrapper.appendChild(highlightDiv);
+  }
+
+  document
+    .querySelectorAll('.custom-asu-code-highlight')
+    .forEach((highlightDiv) => asuCreateCopyButton(highlightDiv));
+  // END ASU CUSTOM UNITY STYLES
+}); // onload end
+
+// //////////////////////////////////////////////////////////////////////////// //
+// Custom Global Nav Tray                                                       //
+// //////////////////////////////////////////////////////////////////////////// //
+// https://community.canvaslms.com/thread/23242-global-nav-custom-tray
+
+(() => {
+  $(document).ready(() => {
+    // Set tray title here  //
+    const title = 'accessibility';
+
+    // Options are above for convenience, continue if you like //
+    const tidle = title.replace(/\s/g, '_').toLowerCase();
+
+    const menu = $('#menu');
+    const icon = $('<li>', {
+      id: `global_nav_${tidle}_menu`,
+      class: 'ic-app-header__menu-list-item',
+      html:
+        `<a id="global_nav_${tidle}_link" href="https://accessibility.asu.edu/canvas-student-accessibility" class="ic-app-header__menu-list-link" target="_blank">` +
+        `<div class="menu-item-icon-container" role="presentation"><span class="svg-${tidle}-holder">` +
+        '<svg version="1.1" class="ic-icon-svg" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 26 26" style="enable-background:new 0 0 26 26;" xml:space="preserve"><g><path class="st0" d="M20.5,8.5c-4.5,1.7-9.8,1.7-15,0L4.6,8.3v3.2L5,11.7l0.1,0.1c1.7,0.5,3.2,0.9,4.6,1.1v9.7h3.4v-5h0.5v5h3.3 v-9.8c1.3-0.2,2.6-0.5,4.1-1.1l0.4-0.2V8.3L20.5,8.5z M15.5,11.6v9.7h-0.7v-5h-3.1v5H11v-9.7l-0.6,0c-1.3-0.2-2.7-0.5-4.4-1V10 c2.5,0.7,4.9,1.1,7.2,1.1c2.3,0,4.6-0.4,6.9-1.1v0.8c-1.2,0.4-2.5,0.7-4,0.9H15.5z"/><path class="st0" d="M13.2,9.1c1.6,0,2.8-1.3,2.8-2.9s-1.3-2.9-2.8-2.9c-1.6,0-2.9,1.3-2.9,2.9S11.6,9.1,13.2,9.1z M13.2,7.9 c-0.9,0-1.6-0.6-1.6-1.6c0-0.9,0.7-1.5,1.6-1.5c0.8,0,1.5,0.6,1.5,1.5C14.7,7.2,14.1,7.9,13.2,7.9z"/><path class="st0" d="M13,0.6C6.2,0.6,0.6,6.2,0.6,13S6.2,25.3,13,25.3S25.3,19.8,25.3,13S19.8,0.6,13,0.6z M13,24.1 c-6.1,0-11-5-11-11.1s5-11,11-11s11.1,5,11.1,11S19.1,24.1,13,24.1z"/></g></svg>' +
+        `</span></div>` +
+        `<div class="menu-item__text">Accessibility</div></a>`,
+    });
+
+    icon.find(`.svg-${tidle}-holder`).load(() => {
+      const svg = $(this).find('svg')[0];
+      const svgId = `global_nav_${tidle}_svg`;
+      svg.setAttribute('id', svgId);
+      svg.setAttribute(
+        'class',
+        'ic-icon-svg menu-item__icon ic-icon-svg--apps svg-icon-help ic-icon-svg-custom-tray'
+      );
+      $(`#${svgId}`).find('path').removeAttr('fill');
+    });
+
+    menu.append(icon);
+  });
+})();
+// //////////////////////////////////////////////////////////////////////////// //
+        ä x ÿÿ     20251211130204-8lÇ •õ¼Ù	k   https://instructure-uploads.s3.amazonaws.com/account_72360000000000001/attachments/114511420/canvas-prod.js      ?«  /* eslint-disable no-use-before-define */
+/* global $, ENV, asu_ga */
+
+// TEST-BETA-PROD ONLY- Do not copy to DEV
+const auSubAccountIds = [184, 186, 187, 188, 189, 190, 191, 192, 193, 194];
+// END TEST-BETA-PROD ONLY
+
+// PROD ONLY - Do not copy to DEV, TEST, BETA
+// GA snippet
+function asuGA(i, s, o, g, r, a, m) {
+  // eslint-disable-next-line no-param-reassign
+  i.GoogleAnalyticsObject = r;
+  // eslint-disable-next-line no-param-reassign, no-unused-expressions
+  (i[r] =
+    i[r] ||
+    // eslint-disable-next-line func-names
+    function () {
+      // eslint-disable-next-line prefer-rest-params, no-param-reassign
+      (i[r].q = i[r].q || []).push(arguments);
+      // eslint-disable-next-line no-sequences
+    }),
+    // eslint-disable-next-line no-param-reassign
+    (i[r].l = 1 * new Date());
+  // eslint-disable-next-line no-unused-expressions, prefer-destructuring, no-sequences, no-param-reassign
+  (a = s.createElement(o)), (m = s.getElementsByTagName(o)[0]);
+  // eslint-disable-next-line no-param-reassign
+  a.async = 1;
+  // eslint-disable-next-line no-param-reassign
+  a.src = g;
+  m.parentNode.insertBefore(a, m);
+}
+
+// <!-- Google Tag Manager -->
+((w, d, s, l, i) => {
+  // eslint-disable-next-line no-param-reassign
+  w[l] = w[l] || [];
+  w[l].push({
+    'gtm.start': new Date().getTime(),
+    event: 'gtm.js',
+  });
+  const f = d.getElementsByTagName(s)[0];
+  const j = d.createElement(s);
+  const dl = l !== 'dataLayer' ? `&l=${l}` : '';
+  j.async = true;
+  j.src = `https://www.googletagmanager.com/gtm.js?id=${i}${dl}`;
+  f.parentNode.insertBefore(j, f);
+})(window, document, 'script', 'dataLayer', 'GTM-PQVJ7SL');
+// <!-- End Google Tag Manager -->
+
+window.ALLY_CFG = {
+  baseUrl: 'https://prod.ally.ac',
+  clientId: 5430,
+};
+
+// eslint-disable-next-line no-undef
+$.getScript(`${ALLY_CFG.baseUrl}/integration/canvas/ally.js`);
+// END PROD ONLY - Do not copy to DEV, TEST, BETA
+
+let asuInactiveHidden;
+
+function setCookie(cName, cValue, expireInDays) {
+  const d = new Date();
+  d.setTime(d.getTime() + expireInDays * 24 * 60 * 60 * 1000);
+  const expires = `expires=${d.toUTCString()}`;
+  document.cookie = `${cName}=${cValue};${expires}; path=/`;
+}
+
+function getCookie(cName) {
+  const name = `${cName}=`;
+  const ca = document.cookie.split(';');
+  let i;
+  let c;
+  for (i = 0; i < ca.length; i++) {
+    c = ca[i];
+    while (c.charAt(0) === ' ') {
+      c = c.substring(1);
+    }
+    if (c.indexOf(name) === 0) {
+      return c.substring(name.length, c.length);
+    }
+  }
+  return '';
+}
+
+function asuParseUrlForIdUrlSearchTerm(targetUrl, searchTerm) {
+  let start;
+  let end;
+  if (targetUrl.indexOf(searchTerm) !== -1) {
+    start = targetUrl.indexOf(searchTerm) + searchTerm.length + 1;
+    end = targetUrl.indexOf('/', start + 1);
+    if (end === -1) {
+      // If there is no next slash, the object's Id goes to the end of the string
+      end = targetUrl.length;
+    }
+    return targetUrl.substring(start, end);
+  }
+  return null;
+}
+
+// Usage: first time paginateAPI( url, processCallback, endingCallback )
+// second time paginateAPI( "", processCallback, endingCallback, count, requestObject )
+function paginateAPI(
+  targetURL = '',
+  processCallback,
+  endingCallback = '',
+  count = 0,
+  requestObject
+) {
+  if (targetURL !== '') {
+    $.ajax({
+      url: targetURL,
+      type: 'GET',
+    }).done((data, status, request) => {
+      const newCount = data.length;
+      processCallback(data, newCount);
+      paginateAPI('', processCallback, endingCallback, data.length, request);
+    });
+  } else if (requestObject.getResponseHeader('link').indexOf('next') > 0) {
+    const linkArray = requestObject.getResponseHeader('link').split(',');
+    linkArray.forEach((link) => {
+      if (link.indexOf('next') > 0) {
+        const nextUrl = link.substring(
+          link.indexOf('<') + 1,
+          link.indexOf('>')
+        );
+        $.ajax({
+          url: nextUrl,
+          type: 'GET',
+        }).done((data, status, innerRequest) => {
+          const newCount = count + data.length;
+          processCallback(data, newCount);
+          paginateAPI(
+            '',
+            processCallback,
+            endingCallback,
+            newCount,
+            innerRequest
+          );
+        });
+      }
+    });
+  } else if (endingCallback !== '') {
+    endingCallback(count);
+  }
+}
+
+// The following code can be used to identify when user content has finished loading into Canvas.
+// Similar code is used as part of USU design tools (designtools.usu.edu) hence the 2 at the end of the functions
+// You are free to use this however you would like - Kenneth Larsen, Utah State University
+// If any of these elements exist, we will watch for page content in them to load
+const klContentWrappersArray2 = [
+  '#course_home_content', // Course Front Page
+  '#wiki_page_show', // Content page
+  '#discussion_topic', // Discussions page
+  '#course_syllabus', // Syllabus page
+  '#assignment_show', // Assignments page
+  '#wiki_page_revisions',
+  '#people-options', // People page
+  '#gradebook_wrapper', // Gradebook (instructor)
+];
+
+// Check to see if the page content has loaded yet
+function klPageContentCheck2(klContentWrapperElement2, checkCount) {
+  let contentLoaded = false;
+  // Content Pages
+  if (
+    $('.show-content').length > 0 &&
+    $('.show-content').children().length > 0
+  ) {
+    contentLoaded = true;
+    // Discussions
+  } else if (
+    $('#discussion_topic').length > 0 &&
+    $('.user_content').text().length > 0
+  ) {
+    contentLoaded = true;
+    // Assignment (Teacher View)
+  } else if ($('#assignment_show .teacher-version').length > 0) {
+    contentLoaded = true;
+  } else if ($('#assignment_show .student-version').length > 0) {
+    contentLoaded = true;
+  } else if ($('#course_syllabus').length > 0) {
+    contentLoaded = true;
+  } else if (
+    $('div[data-view="users"]').length > 0 &&
+    document.querySelector('tbody.collectionViewItems') !== null
+  ) {
+    // people page
+    contentLoaded = true;
+  } else if (
+    $("#gradebook-grid-wrapper div[id*='assignment_'].assignment button")
+      .length > 0
+  ) {
+    // gradebook
+    contentLoaded = true;
+  }
+
+  if (contentLoaded) {
+    console.log('Content has loaded');
+    klAfterContentLoaded2();
+  } else if (checkCount < 50) {
+    const newCheckCount = checkCount + 1;
+    setTimeout(() => {
+      console.log(
+        `Still no content, check again (${klContentWrapperElement2})`
+      );
+      klPageContentCheck2(klContentWrapperElement2, newCheckCount);
+    }, 100);
+  }
+}
+
+function klAfterContentLoaded2() {
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Community%20of%20Care%3A%20Coming%20to%20Campus']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Community%20of%20Care%3A%20Coming%20to%20Campus&name=${ENV.current_user.display_name}`
+  );
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Devils%204%20Devils%3A%20Creating%20a%20Safe%20and%20Caring%20Community']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Devils%204%20Devils%3A%20Creating%20a%20Safe%20and%20Caring%20Community&name=${ENV.current_user.display_name}`
+  );
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate/certificate.html#name=${ENV.current_user.display_name}`
+  );
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate-sustainability/certificate.html']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate-sustainability/certificate.html#name=${ENV.current_user.display_name}`
+  );
+  $(
+    "a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Free%20Speech%20at%20ASU']"
+  ).attr(
+    'href',
+    `https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Free%20Speech%20at%20ASU&name=${ENV.current_user.display_name}`
+  );
+
+  // Check if we're on the People page
+  if (
+    document.querySelector('tbody.collectionViewItems') !== null &&
+    window.location.toString().indexOf('users') > 0
+  ) {
+    asuInactivePeoplePage();
+    asuAddAlertForManualAdds();
+  }
+}
+
+function asuInactivePeoplePage() {
+  // Check if an "asuInactiveHidden" cookie exists, if not set it to false (visible)
+  asuCheckInactiveCookie();
+
+  // Create a mutationObserver that will hide inactive users when the roster list changes (if that is the current user's preference)
+  const mutationObserver = new MutationObserver((mutations) => {
+    mutations.forEach(() => {
+      // console.log(mutation);
+      // If inactive users should be hidden, hide them
+      if (asuInactiveHidden) {
+        asuToggleInactiveUsers();
+      }
+    });
+
+    // Add click event to deactivateUser to catch new rows added to the table
+    let i;
+    for (
+      i = 0;
+      i <
+      $("td.right div.admin-links ul li a[data-event='deactivateUser']").length;
+      i++
+    ) {
+      // Check if we've set a custom attribute on the link to store its state
+      if (
+        !$("td.right div.admin-links ul li a[data-event='deactivateUser']")[
+          i
+        ].getAttribute('hasASUClickEvent')
+      ) {
+        // If not, then add the attribute and the event listener
+        $("td.right div.admin-links ul li a[data-event='deactivateUser']")[
+          i
+        ].setAttribute('hasASUClickEvent', true);
+        $("td.right div.admin-links ul li a[data-event='deactivateUser']")[
+          i
+        ].addEventListener('click', () => {
+          asuCheckForNewlyDeactivatedUsers(0);
+        });
+        console.log(
+          `adding event to ${
+            $("td.right div.admin-links ul li a[data-event='deactivateUser']")[
+              i
+            ].parentElement.parentElement.parentElement.parentElement
+              .parentElement.id
+          }`
+        );
+      }
+    }
+  });
+
+  const tableBody = document.querySelector('tbody.collectionViewItems');
+
+  const config = { attributes: true, childList: true, characterData: true };
+
+  mutationObserver.observe(tableBody, config);
+
+  asuInjectHideShowButtonSelectorPosition(
+    "a[aria-label='Add People']",
+    'before'
+  );
+  asuToggleInactiveUsers();
+  asuFixAlternatingRowStyling();
+  asuAttachInactiveClickHandler();
+
+  $("td.right div.admin-links ul li a[data-event='deactivateUser']").click(
+    () => {
+      asuCheckForNewlyDeactivatedUsers(0);
+    }
+  );
+}
+
+function asuCheckInactiveCookie() {
+  asuInactiveHidden = getCookie('asuInactiveHidden');
+  if (asuInactiveHidden === '') {
+    // Default to false
+    asuInactiveHidden = false;
+    setCookie('asuInactiveHidden', asuInactiveHidden, 365);
+  } else {
+    // Convert from string to boolean
+    asuInactiveHidden = asuInactiveHidden === 'true';
+  }
+}
+
+let acceptButtonHitCount = 0;
+
+async function asuAddAlertForManualAdds() {
+  const currentCourseId = asuParseUrlForIdUrlSearchTerm(
+    window.location.href,
+    'courses'
+  );
+
+  let courseCode;
+
+  await $.get(`/api/v1/courses/${currentCourseId}`, (data2) => {
+    courseCode = data2.course_code.toUpperCase();
+  });
+
+  if (courseCode !== undefined && courseCode !== null) {
+    // add student alert for manual adds only for live courses and on first click
+    if (
+      !courseCode.startsWith('DEV') &&
+      !courseCode.startsWith('TRN') &&
+      !courseCode.startsWith('ORG') &&
+      !courseCode.startsWith('AU')
+    ) {
+      $('#addUsers').click(() => {
+        if (acceptButtonHitCount < 1) {
+          asuCreateAlertDiv(0);
+        }
+      });
+    }
+  }
+}
+
+function asuCreateAlertDiv(checkCount) {
+  const divElement = document.getElementsByClassName('addpeople__peoplesearch');
+  if (divElement.length === 0) {
+    if (checkCount < 25) {
+      const newCheckCount = checkCount + 1;
+      setTimeout(() => {
+        asuCreateAlertDiv(newCheckCount);
+      }, 100);
+    }
+  } else {
+    const alertDiv = document.createElement('div');
+    alertDiv.id = 'alert-content';
+    alertDiv.className = 'custom-asu-alert-content';
+    alertDiv.innerHTML =
+      '<p style="color: whitesmoke; padding: 35px; text-align: center; font-weight: 600">The enrollment for this course is programmatically managed and any students you add manually will be removed nightly. Please reach out to the Help Center if you would like to enroll the student permanently in this course.</p>';
+    const acceptButton = document.createElement('button');
+    acceptButton.id = 'accept-button';
+    acceptButton.innerText = 'Accept';
+    acceptButton.className = 'custom-asu-btn-maroon';
+    acceptButton.style.cssText = 'position: absolute; left: 41%;';
+    alertDiv.appendChild(acceptButton);
+
+    document.body.appendChild(alertDiv);
+    document
+      .getElementById('accept-button')
+      .addEventListener('click', asuRemoveDivElement);
+
+    $(divElement).append(alertDiv);
+  }
+}
+
+function asuRemoveDivElement() {
+  $('#alert-content').remove();
+  acceptButtonHitCount += 1;
+}
+
+function asuCheckForNewlyDeactivatedUsers(checkCount) {
+  if (!asuInactiveHidden) {
+    console.log('Inactive users should be visible, exiting.');
+    return;
+  }
+
+  let newlyDeactivated = false;
+
+  if (
+    $("span[title='This user is currently not able to access the course']")
+      .parent()
+      .parent()
+      .has(':visible').length > 0
+  ) {
+    newlyDeactivated = true;
+  }
+
+  if (newlyDeactivated) {
+    asuToggleInactiveUsers();
+    asuFixAlternatingRowStyling();
+  } else if (checkCount < 50) {
+    const newCheckCount = checkCount + 1;
+    setTimeout(() => {
+      asuCheckForNewlyDeactivatedUsers(newCheckCount);
+    }, 100);
+  }
+}
+
+function asuInjectHideShowButtonSelectorPosition(selector, position) {
+  const showHtml =
+    "<a href='#' class='btn btn-primary pull-right' id='asuToggleInactiveButton' role='button' title='Show Inactive' aria-label='Show Inactive' asuStatus='hidden' style='margin-left: 5px; z-index: 1;'>Show Inactive</a>";
+  const hideHtml =
+    "<a href='#' class='btn btn-primary pull-right' id='asuToggleInactiveButton' role='button' title='Hide Inactive' aria-label='Hide Inactive' asuStatus='visible' style='margin-left: 5px; z-index: 1;'>Hide Inactive</a>";
+
+  if (asuInactiveHidden) {
+    if (position === 'before') {
+      $(selector).before(showHtml);
+    } else {
+      $(selector).after(showHtml);
+    }
+  } else if (position === 'before') {
+    $(selector).before(hideHtml);
+  } else {
+    $(selector).after(hideHtml);
+  }
+}
+
+function asuToggleInactiveUsers() {
+  if (asuInactiveHidden) {
+    $("span[title='This user is currently not able to access the course']")
+      .parent()
+      .parent()
+      .hide();
+  } else {
+    $("span[title='This user is currently not able to access the course']")
+      .parent()
+      .parent()
+      .show();
+  }
+}
+
+function asuFixAlternatingRowStyling() {
+  $('.ic-Table.ic-Table--striped tbody tr').css('background', 'inherit');
+  $('.ic-Table.ic-Table--striped tbody tr:visible:odd').css(
+    'background',
+    '#F5F5F5'
+  );
+  $('.ic-Table.ic-Table--striped tbody tr').hover(
+    function asuTableEvenHoverHandler(e) {
+      $(this).css(
+        'background-color',
+        e.type === 'mouseenter' ? '#E5F2F8' : 'inherit'
+      );
+    }
+  );
+  $('.ic-Table.ic-Table--striped tbody tr:visible:odd').hover(
+    function asuTableOddHoverHandler(e) {
+      $(this).css(
+        'background-color',
+        e.type === 'mouseenter' ? '#E5F2F8' : '#F5F5F5'
+      );
+    }
+  );
+}
+
+function asuAttachInactiveClickHandler() {
+  $('#asuToggleInactiveButton').click(function asuToggleInactiveHandler() {
+    if ($(this).attr('asuStatus') === 'visible') {
+      $(this)
+        .attr('asuStatus', 'hidden')
+        .html('Show Inactive')
+        .attr('aria-label', 'Show Inactive')
+        .attr('title', 'Show Inactive');
+      asuInactiveHidden = true;
+    } else {
+      $(this)
+        .attr('asuStatus', 'visible')
+        .html('Hide Inactive')
+        .attr('aria-label', 'Hide Inactive')
+        .attr('title', 'Hide Inactive');
+      asuInactiveHidden = false;
+    }
+    asuToggleInactiveUsers();
+    asuFixAlternatingRowStyling();
+    // Update the cookie to their current preference
+    setCookie('asuInactiveHidden', asuInactiveHidden, 365);
+  });
+}
+
+const asuWhatAccountAreWeIn = new Promise((resolve) => {
+  if (/courses\/\d+\/settings/.test(window.location.href)) {
+    // Make API call for course and pull account id
+    const currentCourseId = asuParseUrlForIdUrlSearchTerm(
+      window.location.href,
+      'courses'
+    );
+    $.get(`/api/v1/courses/${currentCourseId}`, (data) => {
+      console.log(`Retrieved account id: ${data.account_id}`);
+      resolve(data.account_id);
+    });
+  } else if (/accounts\/\d+/.test(window.location.href)) {
+    // just pull account ID # from URL
+    resolve(asuParseUrlForIdUrlSearchTerm(window.location.href, 'accounts'));
+  }
+});
+
+function asuFilterTermsBasedOnLocation() {
+  let asuCurrentAccountId;
+  let asuSubAccount = 'ASU'; // default to ASU because that is most likely
+  const auSubAccounts = auSubAccountIds;
+
+  if (/accounts\/\d+($|\/$|\/?\?)/.test(window.location.href)) {
+    asuDisableTermFilter();
+  }
+
+  // Decide whether we want ASU or AU terms
+  asuWhatAccountAreWeIn.then(
+    (result) => {
+      asuCurrentAccountId = result;
+      console.log(`We're in account: ${asuCurrentAccountId}`);
+      if (auSubAccounts.indexOf(parseInt(asuCurrentAccountId, 10)) > -1) {
+        console.log('Changing asuSubAccount to AU');
+        asuSubAccount = 'AU';
+      }
+      const termUrl = '/api/v1/accounts/1/terms?per_page=100';
+      const termArray = [];
+
+      const asuBuildTermFilteringList = (data) => {
+        // Parse data to store relevant term details in an array
+        data.enrollment_terms.forEach((term) => {
+          if (term.name.indexOf('AU') === -1) {
+            termArray[term.id] = 'ASU';
+          } else {
+            termArray[term.id] = 'AU';
+          }
+        });
+      };
+
+      const asuCleanTermsOnPage = () => {
+        if (/accounts\/\d+($|\/$|\/?\?)/.test(window.location.href)) {
+          // For accounts > Courses, catch with mutation observer and destroy/hide unwanted spans when they're created
+          // -----------------Accounts > Courses-----------------//
+          const mutationObserver = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+              let currentSpanVal;
+              if (
+                mutation.target.dir === 'ltr' ||
+                mutation.target.localName === 'ul'
+              ) {
+                if (mutation.addedNodes.length !== 0) {
+                  $(
+                    "span[dir='ltr'] > span > span > span > div > ul > li > span > div > ul > li > span"
+                  ).each(function asuShowHideTermAccountHandler() {
+                    const spanItem = $(this);
+                    const termHeading =
+                      spanItem[0].parentNode.parentNode.parentNode.firstChild
+                        .innerText;
+
+                    // lets make sure we are only modifing the correct term list (added since we can no longer rely on list selection path above)
+                    if (
+                      termHeading === 'Show courses from' ||
+                      termHeading === 'Active Terms' ||
+                      termHeading === 'Future Terms' ||
+                      termHeading === 'Past Terms'
+                    ) {
+                      currentSpanVal = $(this).attr('value');
+                      console.log(
+                        `value = ${currentSpanVal}; - asuSubAccount: [${asuSubAccount}] and termArray[this.value]: ${termArray[currentSpanVal]}`
+                      );
+                      if (
+                        asuSubAccount === termArray[currentSpanVal] ||
+                        currentSpanVal === '1'
+                      ) {
+                        $(this).show();
+                      } else {
+                        $(this).hide();
+                      }
+
+                      if ($(this).parent().id === 'asuLoading') {
+                        $(this).parent().remove();
+                      }
+                    }
+                  });
+                }
+              }
+            });
+          });
+
+          mutationObserver.observe(document.body, {
+            attributes: false,
+            characterData: false,
+            childList: true,
+            subtree: true,
+            attributeOldValue: false,
+            characterDataOldValue: false,
+          });
+
+          asuEnableTermFilter();
+          // -------------end Accounts > Courses----------------- //
+        } else if (/courses\/\d+\/settings/.test(window.location.href)) {
+          // -------------Course > Settings----------------- //
+          console.log(
+            `There are ${
+              $('select#course_enrollment_term_id option').length
+            } term options on page load`
+          );
+          let currentOptVal;
+          $('select#course_enrollment_term_id option').each(
+            function asuShowHideTermCourseHandler() {
+              currentOptVal = $(this).attr('value');
+              console.log(
+                `value = ${currentOptVal}; - asuSubAccount: [${asuSubAccount}] and termArray[this.value]: ${termArray[currentOptVal]}`
+              );
+              if (
+                asuSubAccount === termArray[currentOptVal] ||
+                currentOptVal === '1'
+              ) {
+                $(this).show();
+              } else {
+                $(this).hide();
+              }
+            }
+          );
+          // ---------end Course > Settings----------------- //
+        } else {
+          console.log('Unknown page detected, ignoring term filters');
+        }
+      };
+
+      paginateAPI(termUrl, asuBuildTermFilteringList, asuCleanTermsOnPage);
+    },
+    (error) => {
+      asuCurrentAccountId = error;
+    }
+  );
+}
+
+function asuDisableTermFilter() {
+  const filterBox = {};
+  filterBox.obj = $('#termFilter')
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent()
+    .parent();
+  filterBox.top = filterBox.obj.offset().top;
+  filterBox.left = filterBox.obj.offset().left;
+  filterBox.width = filterBox.obj.css('width');
+  filterBox.height = filterBox.obj.css('height');
+  filterBox.paddingLeft = filterBox.obj.css('padding-left');
+
+  $("<div id='loadingFilterBlocker'></div>").prependTo('#wrapper');
+  $('#loadingFilterBlocker')
+    .css('position', 'absolute')
+    .css('background', 'rgba(0, 0, 0, 0.05)')
+    .css('top', filterBox.top)
+    .css('left', filterBox.left)
+    .css('width', filterBox.width)
+    .css('height', filterBox.height)
+    .css('margin-left', filterBox.paddingLeft)
+    .css('border-radius', 'var(--qBMHb-borderRadius)')
+    .css('z-index', 11);
+}
+
+function asuEnableTermFilter() {
+  $('#loadingFilterBlocker').remove();
+}
+
+// asuCheckGlobalNav and asuUpdateGlobalNav (and the event handler added to .mobile-header-hamburger
+// in the window.addEventListener('load') function) are to handle Canvas' mobile responsive global nav menu
+function asuCheckGlobalNav(asuCount, asuCustomHelpMenuDetails) {
+  if (asuCount >= 20) {
+    console.log('asuCheckGlobalNav loop stuck, exiting');
+    return;
+  }
+  const newCount = asuCount + 1;
+
+  setTimeout(() => {
+    if ($("div[aria-label='Global Navigation'][role='dialog']").length === 1) {
+      console.log(`Global Nav element found! asuCount: ${newCount}`);
+      asuUpdateGlobalNav(asuCustomHelpMenuDetails);
+    } else {
+      asuCheckGlobalNav(newCount, asuCustomHelpMenuDetails);
+    }
+  }, 100);
+}
+
+function asuUpdateGlobalNav(asuCustomHelpMenuDetails) {
+  const globalNavUl = $(
+    "div[aria-label='Global Navigation'][role='dialog'] div span ul"
+  );
+  // Check if ASU Header Links exist before adding it
+  if ($('#mobile-custom-asu-header-links').length < 1) {
+    globalNavUl.parent().append(asuCustomHelpMenuDetails);
+    // Also add Accessibility Custom Global Nav Item
+    // Grab the "Dashboard" link's parent li
+    const globalDashboardItem = $(
+      "div[aria-label='Global Navigation'][role='dialog'] li span"
+    )
+      // eslint-disable-next-line func-names
+      .filter(function () {
+        return $(this).html() === 'Dashboard';
+      })
+      .parents('li');
+    // Clone the Dashboard li and add the clone to the end of the list
+    globalDashboardItem.clone().appendTo(globalDashboardItem.parent());
+    // Grab a reference to the new li
+    const globalAccessibilityItem = $(
+      "div[aria-label='Global Navigation'][role='dialog'] li span"
+    )
+      // eslint-disable-next-line func-names
+      .filter(function () {
+        return $(this).html() === 'Dashboard';
+      })
+      .last()
+      .parents('li');
+    // Update the text from Dashboard to Accessibility
+    globalAccessibilityItem
+      .find("span:contains('Dashboard')")
+      .last()
+      .html('Accessibility');
+    // Replace the default dashboard SVG with our custom Accessibility one
+    globalAccessibilityItem
+      .find('svg')
+      .parent()
+      .append(
+        '<svg version="1.1" class="ic-icon-svg" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 26 26" style="enable-background:new 0 0 26 26; width: 2em; height: 2em;" xml:space="preserve"><g><path class="st0" d="M20.5,8.5c-4.5,1.7-9.8,1.7-15,0L4.6,8.3v3.2L5,11.7l0.1,0.1c1.7,0.5,3.2,0.9,4.6,1.1v9.7h3.4v-5h0.5v5h3.3 v-9.8c1.3-0.2,2.6-0.5,4.1-1.1l0.4-0.2V8.3L20.5,8.5z M15.5,11.6v9.7h-0.7v-5h-3.1v5H11v-9.7l-0.6,0c-1.3-0.2-2.7-0.5-4.4-1V10 c2.5,0.7,4.9,1.1,7.2,1.1c2.3,0,4.6-0.4,6.9-1.1v0.8c-1.2,0.4-2.5,0.7-4,0.9H15.5z"/><path class="st0" d="M13.2,9.1c1.6,0,2.8-1.3,2.8-2.9s-1.3-2.9-2.8-2.9c-1.6,0-2.9,1.3-2.9,2.9S11.6,9.1,13.2,9.1z M13.2,7.9 c-0.9,0-1.6-0.6-1.6-1.6c0-0.9,0.7-1.5,1.6-1.5c0.8,0,1.5,0.6,1.5,1.5C14.7,7.2,14.1,7.9,13.2,7.9z"/><path class="st0" d="M13,0.6C6.2,0.6,0.6,6.2,0.6,13S6.2,25.3,13,25.3S25.3,19.8,25.3,13S19.8,0.6,13,0.6z M13,24.1 c-6.1,0-11-5-11-11.1s5-11,11-11s11.1,5,11.1,11S19.1,24.1,13,24.1z"/></g></svg>'
+      );
+    // Remove the original SVG
+    globalAccessibilityItem.find('svg').first().remove();
+    // Update the link to point to the right place
+    globalAccessibilityItem.find('a')[0].href =
+      'https://accessibility.asu.edu/canvas-student-accessibility';
+    // Give the li an ID so that AU can easily hide it
+    globalAccessibilityItem.attr(
+      'id',
+      'asu_global_nav_mobile_accessibility_link'
+    );
+  }
+}
+
+// disable editing of course code and course name and add edit button to route edits to the CES history tab
+function addCourseSettingLinks() {
+  if (
+    !/courses\/\d+\/settings/.test(window.location.href) &&
+    !/courses\/\d+\/details/.test(window.location.href)
+  )
+    return;
+
+  asuWhatAccountAreWeIn.then((result) => {
+    const asuCurrentAccountId = result;
+    if (auSubAccountIds.indexOf(parseInt(asuCurrentAccountId, 10)) > -1) {
+      return;
+    } else {
+      const basePath = 'https://ces.apps.asu.edu';
+      const courseElements = [
+        { id: 'course_name', ariaLabel: 'Edit Course Name' },
+        { id: 'course_course_code', ariaLabel: 'Edit Course Code' },
+        { id: 'course_sis_source_id', ariaLabel: '' }, // Added to keep consistency in disabling inputs
+      ];
+
+      courseElements.forEach(({ id }) => {
+        document.getElementById(id).disabled = true;
+      });
+
+      courseElements.slice(0, 2).forEach(({ id, ariaLabel }) => {
+        const courseInput = document.getElementById(id);
+        const sisIdValue =
+          document.getElementById('course_sis_source_id').value ||
+          document.getElementById('course_sis_source_id').textContent.trim();
+        const encodedSisIdValue = encodeURIComponent(sisIdValue);
+        const link = document.createElement('a');
+
+        link.href = `${basePath}/history?editCourse=true&course_sis_id=${encodedSisIdValue}`;
+        link.target = '_blank';
+        link.innerText = ariaLabel;
+        link.style.paddingLeft = '5px';
+
+        if (ariaLabel) {
+          link.setAttribute('aria-label', ariaLabel);
+        }
+
+        courseInput.parentNode.insertBefore(link, courseInput.nextSibling);
+      });
+    }
+  });
+}
+
+window.addEventListener(
+  'message',
+  (event) => {
+    const trustedOrigins = ['https://credid.asu.edu'];
+
+    if (!trustedOrigins.includes(event.origin) || !event.data.subject) {
+      // Exit if the message is not from a trusted domain or if subject is absent
+      return;
+    }
+
+    const messageData = event.data.subject;
+
+    // Refresh the page if credId LTI sends expected message data
+    if (messageData === 'lti.refreshAfterSubmission.credId') {
+      window.location.reload();
+    }
+  },
+  false
+);
+
+window.addEventListener('load', () => {
+  // PROD ONLY - Do not copy to DEV/TEST/BETA
+  // MediaPlus analytics
+  const elementsWithUrl = document.querySelectorAll('[src],[href]');
+  const regex = /mediaplus.*\.asu\.edu\/lti\/embedded/;
+
+  elementsWithUrl.forEach((element) => {
+    const mediaplusUrl = element.src || element.href;
+    if (mediaplusUrl && mediaplusUrl.match(regex)) {
+      if (element.src) {
+        // eslint-disable-next-line no-param-reassign
+        element.src += `&userId=${window.ENV.current_user_id}`;
+      } else {
+        // eslint-disable-next-line no-param-reassign
+        element.href += `&userId=${window.ENV.current_user_id}`;
+      }
+    }
+  });
+
+  addCourseSettingLinks();
+
+  // Initialize GA
+  asuGA(
+    window,
+    document,
+    'script',
+    'https://www.google-analytics.com/analytics.js',
+    'asu_ga'
+  );
+
+  // Fetch Canvas userId and pass with pageiew to GA
+  const USER_ID = ENV.current_user_id;
+  asu_ga('create', 'UA-42798992-21', 'auto', {
+    userId: USER_ID,
+  });
+  asu_ga('send', 'pageview');
+
+  // Check if we are on a redirect page
+  if ($('#custom_url').length > 0 && $('#custom_new_tab').length === 0) {
+    // Check if the redirect link is pointing to a Canvas domain
+    if (
+      $('#custom_url')
+        .val()
+        .substring(0, $('#custom_url').val().indexOf('/', 9)) ===
+        'https://asu.instructure.com' ||
+      $('#custom_url')
+        .val()
+        .substring(0, $('#custom_url').val().indexOf('/', 9)) ===
+        'https://canvas.asu.edu'
+    ) {
+      // Compare custom_url against current domain
+      if (
+        window.location
+          .toString()
+          .substring(0, window.location.toString().indexOf('/', 9)) !==
+        $('#custom_url')
+          .val()
+          .substring(0, $('#custom_url').val().indexOf('/', 9))
+      ) {
+        // Domains do not match, update custom_url to reflect current domain and set window.location to redirect
+        window.location =
+          window.location
+            .toString()
+            .substring(0, window.location.toString().indexOf('/', 9)) +
+          $('#custom_url')
+            .val()
+            .substring($('#custom_url').val().indexOf('/', 9));
+      }
+    }
+  }
+  // END PROD ONLY - Do not copy to DEV/TEST/BETA
+
+  // Check if we're on a course page
+  if (window.location.pathname.substring(1, 8) === 'courses') {
+    // Add hidden eye icon to course navigation link
+    const courseNavLinks = document.querySelectorAll('#section-tabs > li > a');
+    if (courseNavLinks) {
+      courseNavLinks.forEach((el) => {
+        switch (el.innerText) {
+          // Ally Dashboard
+          case 'Ally Dashboard':
+            // eslint-disable-next-line no-param-reassign
+            el.title = 'Not visible to students';
+            // eslint-disable-next-line no-param-reassign
+            el.innerHTML = `${el.innerHTML}<i class="nav-icon icon-off" aria-hidden="true" role="presentation"></i>`;
+            break;
+
+          // Rubrics
+          case 'Rubrics':
+            if (el.childElementCount === 0) {
+              // eslint-disable-next-line no-param-reassign
+              el.title = 'Not visible to students';
+              // eslint-disable-next-line no-param-reassign
+              el.innerHTML = `${el.innerHTML}<i class="nav-icon icon-off" aria-hidden="true" role="presentation"></i>`;
+            }
+            break;
+
+          // Item Banks
+          case 'Item Banks':
+            if (el.childElementCount === 0) {
+              // eslint-disable-next-line no-param-reassign
+              el.title = 'Not visible to students';
+              // eslint-disable-next-line no-param-reassign
+              el.innerHTML = `${el.innerHTML}<i class="nav-icon icon-off" aria-hidden="true" role="presentation"></i>`;
+            }
+            break;
+
+          default:
+            break;
+        }
+      });
+    }
+  }
+
+  // Check if we're on the course settings page
+  if (window.location.pathname.endsWith('settings')) {
+    // remove delete icon for CES managed sections from section tab
+    const courseSections = document.getElementsByClassName('users_count');
+
+    if (courseSections && courseSections.length > 0) {
+      for (let i = 0; i < courseSections.length; i++) {
+        const sectionElement = courseSections[i];
+
+        if (sectionElement.innerText.includes('_section_')) {
+          const { nextElementSibling } = sectionElement;
+
+          if (nextElementSibling && nextElementSibling.children) {
+            const nextElementSiblingChildren = nextElementSibling.children;
+
+            if (nextElementSiblingChildren.length === 2) {
+              nextElementSiblingChildren[1].remove();
+            } else if (nextElementSiblingChildren.length === 1) {
+              nextElementSiblingChildren[0].remove();
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Check if we're on a page with term selection
+  if (
+    /accounts\/\d+($|\/$|\/?\?)/.test(window.location.href) ||
+    /courses\/\d+\/settings/.test(window.location.href)
+  ) {
+    asuFilterTermsBasedOnLocation();
+  }
+
+  // Check if we're on a course wiki page
+  if (
+    /^\/courses\/\d+\/pages/.test(window.location.pathname) ||
+    /^\/courses\/\d+\/wiki/.test(window.location.pathname)
+  ) {
+    if (window.location.origin === 'https://asu.instructure.com') {
+      // Use MutationObserver to wait for iframe
+      const observer = new MutationObserver(() => {
+        const hasAimlIframe = Array.from(
+          document.getElementsByTagName('iframe')
+        ).some((iframe) => iframe.src && iframe.src.includes('.aiml.asu.edu'));
+        if (hasAimlIframe) {
+          observer.disconnect(); // Stop observing after redirect
+          window.location = `https://canvas.asu.edu${window.location.pathname}`;
+        }
+      });
+
+      observer.observe(document.body, {
+        childList: true,
+        subtree: true,
+      });
+
+      // check immediately in case iframe is already present
+      const hasAimlIframe = Array.from(
+        document.getElementsByTagName('iframe')
+      ).some((iframe) => iframe.src && iframe.src.includes('.aiml.asu.edu'));
+      if (hasAimlIframe) {
+        window.location = `https://canvas.asu.edu${window.location.pathname}`;
+        observer.disconnect();
+      }
+    }
+  }
+
+  // Build list of just menu details and send it to the mobile header click event
+  const asuHeaderListItems =
+    '<li><a class="Button" href="http://www.asu.edu/">ASU Home</a></li><li><a class="Button" href="https://my.asu.edu/">My ASU</a></li><li><a class="Button" href="http://www.asu.edu/colleges/">Colleges &amp; Schools</a></li><li><a class="Button" href="http://www.asu.edu/map/">Map &amp; Locations</a></li><li><a class="Button" href="https://www.asu.edu/about/contact">Contact Us</a></li>';
+  $('.mobile-header-hamburger').click(() => {
+    asuCheckGlobalNav(
+      0,
+      `<ul id="mobile-custom-asu-header-links">${asuHeaderListItems}</ul>`
+    );
+  });
+
+  // Add header links to every page except speed grader and students' view of their assignment submissions or quiz submissions
+  if (
+    window.location.href.indexOf('submissions') === -1 &&
+    window.location.href.indexOf('speed_grader') === -1 &&
+    $('#speedgrader_iframe').length === 0 &&
+    window.location.href.indexOf('headless') === -1
+  ) {
+    $(
+      `<div class="asuHeaderPadding"></div><div id="custom-asu-header-links"><ul id="custom-asu-header-ul">${asuHeaderListItems}</ul></div>`
+    ).prependTo('#wrapper');
+  }
+
+  // Remove harmful things
+  $(
+    'div.public_options > input#course_indexed, div.public_options > label[for="course_indexed"]'
+  ).remove();
+  $('div.public_options > input[name="course[indexed]"]').val('0');
+
+  // Update 404 pages to refer students to the Help Center
+  $('a.submit_error_link').before(
+    `If you reached this page through a link in your course, please reach out to your instructor and include this URL ( ${window.location} ), as well as what you were attempting to do when you encountered the error.<br><br>If this link was not in a course, or you need assistance with other issues, please reach out to the ASU Help Center at 1-855-278-5080.`
+  );
+  $('a.submit_error_link, #submit_error_form').remove();
+
+  // Identify which page we are on and when the content has loaded
+  for (let i = 0; i <= klContentWrappersArray2.length; i++) {
+    if ($(klContentWrappersArray2[i]).length > 0) {
+      klPageContentCheck2(klContentWrappersArray2[i], 0);
+      break;
+    }
+  }
+
+  // ASU CUSTOM UNITY STYLES
+
+  /* For Custom Accordion and Custom Tabbed Panes */
+  // allow only one accordion to render
+  const acc = document.getElementsByClassName('custom-asu-card-header');
+  const panel = document.getElementsByClassName('custom-asu-card-body');
+
+  for (let i = 0; i < acc.length; i++) {
+    // eslint-disable-next-line func-names
+    acc[i].onclick = function (event) {
+      event.preventDefault();
+      const setClasses = !this.classList.contains('active');
+      const iTag = this.parentNode.parentNode.getElementsByTagName('i');
+      asuSetClass(acc, 'active', 'remove');
+      asuSetClass(panel, 'show', 'remove');
+      asuSetClass(iTag, 'icon-arrow-open-up', 'remove');
+      asuSetClass(iTag, 'icon-arrow-open-down', 'add');
+
+      if (setClasses) {
+        this.classList.toggle('active');
+        this.nextElementSibling.classList.toggle('show');
+        $(this)
+          .find('i')
+          .removeClass('icon-arrow-open-down')
+          .addClass('icon-arrow-open-up');
+      }
+    };
+  }
+
+  function asuSetClass(els, className, fnName) {
+    for (let i = 0; i < els.length; i++) {
+      els[i].classList[fnName](className);
+    }
+  }
+
+  // tabbed panes remove active class on item change
+  $('.custom-asu-nav-item').click((e) => {
+    e.preventDefault();
+    $('.active').removeClass('active');
+    $(e.currentTarget).addClass('active');
+    const tabContentId = e.currentTarget.hash;
+    $(tabContentId).addClass('show active');
+  });
+
+  /* End Custom Accordion and Tabbed Panes */
+
+  function asuCreateCopyButton(highlightDiv) {
+    const button = document.createElement('button');
+    button.className = 'copy-code-button';
+    button.type = 'button';
+    button.innerText = 'Copy';
+    button.style =
+      'float: right; height: 35px; border-radius: 5px; color: #525252; border: solid 1px #c7cdd1;';
+    button.addEventListener('click', () =>
+      asuCopyCodeToClipboard(button, highlightDiv)
+    );
+    asuAddCopyButtonToDom(button, highlightDiv);
+  }
+
+  async function asuCopyCodeToClipboard(button, highlightDiv) {
+    const codeToCopy = highlightDiv.querySelector(':last-child').innerText;
+    let result;
+    try {
+      result = await navigator.permissions.query({ name: 'clipboard-write' });
+      if (result.state === 'granted' || result.state === 'prompt') {
+        await navigator.clipboard.writeText(codeToCopy);
+      } else {
+        asuCopyCodeBlockExecCommand(codeToCopy, highlightDiv);
+      }
+    } catch (_) {
+      asuCopyCodeBlockExecCommand(codeToCopy, highlightDiv);
+    } finally {
+      asuCodeWasCopied(button);
+    }
+  }
+
+  function asuCopyCodeBlockExecCommand(codeToCopy, highlightDiv) {
+    const textArea = document.createElement('textArea');
+    textArea.contentEditable = 'true';
+    textArea.readOnly = 'false';
+    textArea.className = 'copyable-text-area';
+    textArea.value = codeToCopy;
+    highlightDiv.insertBefore(textArea, highlightDiv.firstChild);
+    const range = document.createRange();
+    range.selectNodeContents(textArea);
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+    textArea.setSelectionRange(0, 999999);
+    document.execCommand('copy');
+    highlightDiv.removeChild(textArea);
+  }
+
+  // change copy text to copied when button is copied
+  function asuCodeWasCopied(button) {
+    button.blur();
+    // eslint-disable-next-line no-param-reassign
+    button.innerText = 'Copied!';
+    // eslint-disable-next-line func-names
+    setTimeout(function () {
+      // eslint-disable-next-line no-param-reassign
+      button.innerText = 'Copy';
+    }, 2000);
+  }
+
+  // add copy button to the dom
+  function asuAddCopyButtonToDom(button, highlightDiv) {
+    highlightDiv.insertBefore(button, highlightDiv.firstChild);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'highlight-wrapper';
+    highlightDiv.parentNode.insertBefore(wrapper, highlightDiv);
+    wrapper.appendChild(highlightDiv);
+  }
+
+  document
+    .querySelectorAll('.custom-asu-code-highlight')
+    .forEach((highlightDiv) => asuCreateCopyButton(highlightDiv));
+  // END ASU CUSTOM UNITY STYLES
+}); // onload end
+
+// //////////////////////////////////////////////////////////////////////////// //
+// Custom Global Nav Tray                                                       //
+// //////////////////////////////////////////////////////////////////////////// //
+// https://community.canvaslms.com/thread/23242-global-nav-custom-tray
+
+(() => {
+  $(document).ready(() => {
+    // Set tray title here  //
+    const title = 'accessibility';
+
+    // Options are above for convenience, continue if you like //
+    const tidle = title.replace(/\s/g, '_').toLowerCase();
+
+    const menu = $('#menu');
+    const icon = $('<li>', {
+      id: `global_nav_${tidle}_menu`,
+      class: 'ic-app-header__menu-list-item',
+      html:
+        `<a id="global_nav_${tidle}_link" href="https://accessibility.asu.edu/canvas-student-accessibility" class="ic-app-header__menu-list-link" target="_blank">` +
+        `<div class="menu-item-icon-container" role="presentation"><span class="svg-${tidle}-holder">` +
+        '<svg version="1.1" class="ic-icon-svg" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 26 26" style="enable-background:new 0 0 26 26;" xml:space="preserve"><g><path class="st0" d="M20.5,8.5c-4.5,1.7-9.8,1.7-15,0L4.6,8.3v3.2L5,11.7l0.1,0.1c1.7,0.5,3.2,0.9,4.6,1.1v9.7h3.4v-5h0.5v5h3.3 v-9.8c1.3-0.2,2.6-0.5,4.1-1.1l0.4-0.2V8.3L20.5,8.5z M15.5,11.6v9.7h-0.7v-5h-3.1v5H11v-9.7l-0.6,0c-1.3-0.2-2.7-0.5-4.4-1V10 c2.5,0.7,4.9,1.1,7.2,1.1c2.3,0,4.6-0.4,6.9-1.1v0.8c-1.2,0.4-2.5,0.7-4,0.9H15.5z"/><path class="st0" d="M13.2,9.1c1.6,0,2.8-1.3,2.8-2.9s-1.3-2.9-2.8-2.9c-1.6,0-2.9,1.3-2.9,2.9S11.6,9.1,13.2,9.1z M13.2,7.9 c-0.9,0-1.6-0.6-1.6-1.6c0-0.9,0.7-1.5,1.6-1.5c0.8,0,1.5,0.6,1.5,1.5C14.7,7.2,14.1,7.9,13.2,7.9z"/><path class="st0" d="M13,0.6C6.2,0.6,0.6,6.2,0.6,13S6.2,25.3,13,25.3S25.3,19.8,25.3,13S19.8,0.6,13,0.6z M13,24.1 c-6.1,0-11-5-11-11.1s5-11,11-11s11.1,5,11.1,11S19.1,24.1,13,24.1z"/></g></svg>' +
+        `</span></div>` +
+        `<div class="menu-item__text">Accessibility</div></a>`,
+    });
+
+    icon.find(`.svg-${tidle}-holder`).load(() => {
+      const svg = $(this).find('svg')[0];
+      const svgId = `global_nav_${tidle}_svg`;
+      svg.setAttribute('id', svgId);
+      svg.setAttribute(
+        'class',
+        'ic-icon-svg menu-item__icon ic-icon-svg--apps svg-icon-help ic-icon-svg-custom-tray'
+      );
+      $(`#${svgId}`).find('path').removeAttr('fill');
+    });
+
+    menu.append(icon);
+  });
+})();
+// //////////////////////////////////////////////////////////////////////////// //
+Ó˜ÀÙ           ¦K\Z      auSubAccountIds    I}‚»      asuGA      kßT      GoogleAnalyticsObject      ğ„u2      push   DC      createElement      XFZ      getElementsByTagName   œ·È›      src    ¥_ÏÓ
+      parentNode     åLÉ2      insertBefore	   âbãö	      gtm.start
+      uô.      getTime    II·P      event      ^©~„      gtm.js     ¿KRt	      dataLayer      §üÂµ      &l=    H*ĞÏ+      https://www.googletagmanager.com/gtm.js?id=    ø2‡‰      window     ¸O€      document   òïSf      GTM-PQVJ7SL    Çğ=      ALLY_CFG   ü-É      baseUrl    ”;)Ğ      https://prod.ally.ac   3#      clientId   ı·éI	      getScript      qi¡g      /integration/canvas/ally.js    à›‡ó      asuInactiveHidden      K·	      setCookie      Ç±Ö       cName      À†—      cValue     Or½      expireInDays   °Œô      setTime    ø¾R      expires     q­      expires=!   _YNx      cookie"     ­jşÏ      ; path=/#   èIk’	      getCookie$      vŒÄ      charAt%     ßYã	      substring&      ÚEœÁ      indexOf'    ¶3æ¥      asuParseUrlForIdUrlSearchTerm(      àôy4	      targetUrl)      ^è
+      searchTerm*     í=ˆ      paginateAPI+    '·£	      targetURL,      áèL¥      processCallback-    ¸Œ;&      endingCallback.     tªK      requestObject/      ¾dÈ      ajax0   Å™ü
+      GET1    6—(      data2   l(      request3    ªø}°      newCount4   p«ö      getResponseHeader5      üIëÕ      link6   Òä	      linkArray7      ×OÄ      nextUrl8    Xuß!      innerRequest9   ş+      klContentWrappersArray2:    ©œ‡      #course_home_content;   t8À      #wiki_page_show<    A¸µ      #discussion_topic=      ,éK      #course_syllabus>   îlW      #assignment_show?   ]â§¢      #wiki_page_revisions@   ®¶*      #people-optionsA    wN@	      #gradebook_wrapperB     _c\»      klPageContentCheck2C    ¶Õ5»      klContentWrapperElement2D   'BL&
+      checkCountE     ^É§      contentLoadedF      £“°      .show-contentG      
+}N      childrenH   ãùÃ‰      .user_contentI      ˆ3Àµ      textJ   …š!      #assignment_show .teacher-versionK      äŞZ!      #assignment_show .student-versionL      ª°×      div[data-view="users"]M     Ø1:ò      querySelectorN      ôõ£^      tbody.collectionViewItemsO      2Ô‚­@      #gradebook-grid-wrapper div[id*='assignment_'].assignment buttonP   şQ1      consoleQ    =Xû      logR    Œ„İÍ      Content has loadedS     ½~-$      klAfterContentLoaded2T      µóo«      newCheckCountU      3AtÙ
+      setTimeoutV     gª—      Still no content, check again (W    À·ü!}      a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Community%20of%20Care%3A%20Coming%20to%20Campus']X      A¢½      attrY   »©`X      hrefZ   i£y      https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Community%20of%20Care%3A%20Coming%20to%20Campus&name=[      +ºş      ENV\    ¶ª·»      current_user]   ³#ê	      display_name^   R½ò•      a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Devils%204%20Devils%3A%20Creating%20a%20Safe%20and%20Caring%20Community']_      QÌd‘      https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Devils%204%20Devils%3A%20Creating%20a%20Safe%20and%20Caring%20Community&name=`      lI½ÛF      a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html']a     ş}B      https://www.asu.edu/it/acadtech/certificate/certificate.html#name=b     QÃ9U      a[href='https://www.asu.edu/it/acadtech/certificate-sustainability/certificate.html']c      NaEQ      https://www.asu.edu/it/acadtech/certificate-sustainability/certificate.html#name=d      ÚÂVf      a[href='https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Free%20Speech%20at%20ASU']e     ÉÿÇb      https://www.asu.edu/it/acadtech/certificate/certificate.html#course=Free%20Speech%20at%20ASU&name=f     0+QA      locationg   $
+á      usersh      $ü
+|      asuInactivePeoplePagei      µR.º      asuAddAlertForManualAddsj   É¾E      asuCheckInactiveCookiek     l–(§      mutationObserverl   ]Q¡(      MutationObserverm   ">‚	      mutationsn      \Î6Ş      asuToggleInactiveUserso     -û[*=      td.right div.admin-links ul li a[data-event='deactivateUser']p      4>ôE      getAttributeq   ÈÏÜ      hasASUClickEventr   —{ÚD      setAttributes    rO      addEventListenert   ŸªâX      clicku      d<û
+       asuCheckForNewlyDeactivatedUsersv   …³‘      adding event to w   ËêXÔ      parentElementx      ÈO­	      tableBodyy      ~4      configz     ãŒ5Æ
+      attributes{     F÷	      childList|      dv      characterData}      dìã      observe~    u~ß'      asuInjectHideShowButtonSelectorPosition    ®Š°ö      a[aria-label='Add People']€     ÍÓO      before     }HcŞ      asuFixAlternatingRowStyling‚    B€¸      asuAttachInactiveClickHandlerƒ      YıYy      acceptButtonHitCount„   Èfí      currentCourseId…    ®Vbc      courses†    Ú¯tâ
+      courseCode‡     ãÿß      /api/v1/courses/ˆ   R«WĞ      data2‰      ²2á      course_codeŠ    ¬âs×      toUpperCase‹    İJX?
+      startsWithŒ     ˜è      DEV    h#      TRN    BÂrL      ORG    u¡İ(	      #addUsers      ÓówW      asuCreateAlertDiv‘      ¿ã«
+      divElement’     ÿåÀ      getElementsByClassName“     Ç?o      addpeople__peoplesearch”    ‡ÂHb      alertDiv•   œ³æÙ      div–    ÃPòŒ      alert-content—      6CY>	      className˜      ‘«od      custom-asu-alert-content™   QÃ:	      innerHTMLš      ÿıfÉ3     <p style="color: whitesmoke; padding: 35px; text-align: center; font-weight: 600">The enrollment for this course is programmatically managed and any students you add manually will be removed nightly. Please reach out to the Help Center if you would like to enroll the student permanently in this course.</p>›    Î¦eÔ      acceptButtonœ   úU~      button     Û²h—      accept-button      ­	v	      innerTextŸ      fMW      Accept      yDp÷      custom-asu-btn-maroon¡      dMC¾      cssText¢    İ“µ       position: absolute; left: 41%;£     ­$~      appendChild¤    ˜h;      body¥   tÇ£      getElementById¦     Lƒ      asuRemoveDivElement§    ÜB-      append¨     SB¸      #alert-content©     *N·Æ      removeª     =|uÎ*      Inactive users should be visible, exiting.«     
+Ï{      newlyDeactivated¬   gpÈ¥B      span[title='This user is currently not able to access the course']­     şèù2      parent®     SZK#      :visible¯    _l$      selector°   È’      position±   ƒgÑy      showHtml²   îÓ8£Õ      <a href='#' class='btn btn-primary pull-right' id='asuToggleInactiveButton' role='button' title='Show Inactive' aria-label='Show Inactive' asuStatus='hidden' style='margin-left: 5px; z-index: 1;'>Show Inactive</a>³      ¾D¼Ì      hideHtml´   V¿XœÖ      <a href='#' class='btn btn-primary pull-right' id='asuToggleInactiveButton' role='button' title='Hide Inactive' aria-label='Hide Inactive' asuStatus='visible' style='margin-left: 5px; z-index: 1;'>Hide Inactive</a>µ     ³T      after¶      Ÿvô}      hide·   H‡’K      show¸   ã#_“$      .ic-Table.ic-Table--striped tbody tr¹   ,
+      backgroundº     D!%,      inherit»    +jÑ0      .ic-Table.ic-Table--striped tbody tr:visible:odd¼   ƒ„G      #F5F5F5½    d¨¤ú      hover¾      <;J      asuTableEvenHoverHandler¿   b Y      background-colorÀ   ™FÊ
+      mouseenterÁ     è¤š      #E5F2F8Â    õ-ĞÃ      asuTableOddHoverHandlerÃ    —]"L      #asuToggleInactiveButtonÄ   zâL      asuToggleInactiveHandlerÅ   hK‹°	      asuStatusÆ      ?Iq›      visibleÇ    „ÛèW      hiddenÈ     ÔãX      htmlÉ   l`=G      Show InactiveÊ      õÑ¿¬
+      aria-labelË     ÒE      titleÌ      °åœ      Hide InactiveÍ      R¥YM      asuWhatAccountAreWeInÎ      À;      courses\/\d+\/settingsÏ     ”ÍâC      Retrieved account id: Ğ     ‰İO)
+      account_idÑ     Â.@      accounts\/\d+Ò      =¬ÇÒ      accountsÓ   ‚·@d      asuFilterTermsBasedOnLocationÔ      peòu      asuCurrentAccountIdÕ    I8ö      asuSubAccountÖ      EZb      ASU×    m&÷      auSubAccountsØ      ÿUä      accounts\/\d+($|\/$|\/?\?)Ù     ¯ÇÑ/      asuDisableTermFilterÚ    ñ^      We're in account: Û     RI(ˆ      Changing asuSubAccount to AUÜ   6€u_      termUrlİ    s7†%      /api/v1/accounts/1/terms?per_page=100Ş      vç‹¡	      termArrayß      QåÏ;      asuBuildTermFilteringListà      ÑÜ€      enrollment_termsá   WH‰#      termâ    \i0      asuCleanTermsOnPageã    ±ğtØ      mutationä   	¼|s      currentSpanValå     ¸Ìa      diræ    S      ltrç    p§úu	      localNameè      ;×sİ
+      addedNodesé     wÍR      span[dir='ltr'] > span > span > span > div > ul > li > span > div > ul > li > spanê     RÏ®‰      eachë   lªEQ      asuShowHideTermAccountHandlerì      ëœ      spanItemí   îö…|      termHeadingî    ~Xßº
+      firstChildï     *m”      Show courses fromğ      ¡Š?r      Active Termsñ   UÇ™      Future Termsò   Ö~Öü
+      Past Termsó     ĞF      value = ô    ü      ; - asuSubAccount: [õ   Pœ<      ] and termArray[this.value]: ö      Qœ‰ 
+      asuLoading÷     ú3>      subtreeø    ï¾­(      attributeOldValueù      Pdb      characterDataOldValueú      VhÊã      asuEnableTermFilterû     V†
+      There are ü     h)õ'      select#course_enrollment_term_id optionı    Æ£¦       term options on page loadş     Ñyx      currentOptValÿ      ?6ò      asuShowHideTermCourseHandler   >Ç,      Unknown page detected, ignoring term filters  =åU	      filterBox     ßN#9      obj   Uhk      #termFilter   $Ãç      top   õ]‡      left  ëÄJû      width     ·ÉÅ      height    wš9      paddingLeft	   Ôæ      padding-left
+  G R%      <div id='loadingFilterBlocker'></div>     ©8GR	      prependTo     ˜3$‡      #wrapper  ŞÎ¶      #loadingFilterBlocker     H<*      absolute  ÙZ^      rgba(0, 0, 0, 0.05)   ò(:É      margin-left   Ûë§$      border-radius     ¥Ğïu      var(--qBMHb-borderRadius)     Œ/ê      z-index   õ¢€U      asuCheckGlobalNav     jüF±      asuCount  SöLg      asuCustomHelpMenuDetails  ±«¶%      asuCheckGlobalNav loop stuck, exiting     U{Ø2      div[aria-label='Global Navigation'][role='dialog']    !NCà$      Global Nav element found! asuCount:   „Af      asuUpdateGlobalNav    †àİ™      globalNavUl   ı[>      div[aria-label='Global Navigation'][role='dialog'] div span ul    órs¸      #mobile-custom-asu-header-links   õ“ù      globalDashboardItem   .6úd:      div[aria-label='Global Navigation'][role='dialog'] li span     >	Å      filter!    EÎŞ	      Dashboard"     Ív=      parents#   ±4®      clone$      çãV      appendTo%  ‡7Äw      globalAccessibilityItem&   ¾Õ      last'  °ûíÊ      span:contains('Dashboard')(    ‡µ(      Accessibility)     a‡ŞŒ      svg*   Xb›øå     <svg version="1.1" class="ic-icon-svg" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 26 26" style="enable-background:new 0 0 26 26; width: 2em; height: 2em;" xml:space="preserve"><g><path class="st0" d="M20.5,8.5c-4.5,1.7-9.8,1.7-15,0L4.6,8.3v3.2L5,11.7l0.1,0.1c1.7,0.5,3.2,0.9,4.6,1.1v9.7h3.4v-5h0.5v5h3.3 v-9.8c1.3-0.2,2.6-0.5,4.1-1.1l0.4-0.2V8.3L20.5,8.5z M15.5,11.6v9.7h-0.7v-5h-3.1v5H11v-9.7l-0.6,0c-1.3-0.2-2.7-0.5-4.4-1V10 c2.5,0.7,4.9,1.1,7.2,1.1c2.3,0,4.6-0.4,6.9-1.1v0.8c-1.2,0.4-2.5,0.7-4,0.9H15.5z"/><path class="st0" d="M13.2,9.1c1.6,0,2.8-1.3,2.8-2.9s-1.3-2.9-2.8-2.9c-1.6,0-2.9,1.3-2.9,2.9S11.6,9.1,13.2,9.1z M13.2,7.9 c-0.9,0-1.6-0.6-1.6-1.6c0-0.9,0.7-1.5,1.6-1.5c0.8,0,1.5,0.6,1.5,1.5C14.7,7.2,14.1,7.9,13.2,7.9z"/><path class="st0" d="M13,0.6C6.2,0.6,0.6,6.2,0.6,13S6.2,25.3,13,25.3S25.3,19.8,25.3,13S19.8,0.6,13,0.6z M13,24.1 c-6.1,0-11-5-11-11.1s5-11,11-11s11.1,5,11.1,11S19.1,24.1,13,24.1z"/></g></svg>+     `~ß      first,     Ú—ó:      https://accessibility.asu.edu/canvas-student-accessibility-    W¥v;(      asu_global_nav_mobile_accessibility_link.  cj%      addCourseSettingLinks/     5„ã¿      courses\/\d+\/details0     ‘ap&      basePath1  ’¶ŠÜ      https://ces.apps.asu.edu2  "˜"R      courseElements3    ÑBh¼      course_name4   ._Û$	      ariaLabel5     “(å      Edit Course Name6  l	´I      course_course_code7    É*†      Edit Course Code8  î˜êá      course_sis_source_id9  zƒw      disabled:  Ø… Ì      slice;     ¢P<d      courseInput<   ‹8ò
+      sisIdValue=    bÈÅe      textContent>   —–™b      trim?  ƒö„      encodedSisIdValue@     W‡áŸ'      /history?editCourse=true&course_sis_id=A   9Ò×^      _blankB    qñÆ      5pxC   „'n      nextSiblingD   éFŒ      trustedOriginsE    >íÓ
+      https://credid.asu.eduF    =¨€;      originG    …89      subjectH   <=õÕ      messageDataI   t“Ÿ!      lti.refreshAfterSubmission.credIdJ     M½T      reloadK    2‡U)      loadL  <o’’      elementsWithUrlM   #¥      querySelectorAllN  _<~‹      [src],[href]O  ²cT      regexP     Òµ¿=$      mediaplus.*\.asu\.edu\/lti\/embeddedQ  ÌĞ;Ğ      mediaplusUrlR  ¥¸mC      &userId=S  Ö[İW      current_user_idT   I®-      https://www.google-analytics.com/analytics.jsU     öma      asu_gaV    Cù’ñ      USER_IDW   :	¶#      createX    M"z†      UA-42798992-21Y    zÁ²S      autoZ  jé¼      userId[    ü,¸      send\  2¤±h      pageview]  ÷ŸŒ=      #custom_url^   
+s)ı      #custom_new_tab_   &Ú›      val`   ‰Èäİ      https://asu.instructure.coma   êéTì      https://canvas.asu.edub    Ğ¨4O      pathnamec  œß•ú      courseNavLinksd    †|‘      #section-tabs > li > ae    ^|¦      Ally Dashboardf    &g#E      Not visible to studentsg   m¬1ÄH      <i class="nav-icon icon-off" aria-hidden="true" role="presentation"></i>h  ‚¡k      Rubricsi   (KØI      childElementCountj     Í‡.¥
+      Item Banksk    lça      endsWithl  Ñ™Kš      settingsm  GMDì      courseSectionsn    óˆ      users_counto   ¼Ô.f      sectionElementp    	™À	      _section_q     ä}      nextElementSiblingr    ré7      nextElementSiblingChildrens    ÌQ—º      ^\/courses\/\d+\/pagest    ä­#      ^\/courses\/\d+\/wikiu     şUyh      observerv  ….­      hasAimlIframew     á7»µ      iframex    $İgØ      somey  ™9      .aiml.asu.eduz     ı› 
+      disconnect{    aœ      asuHeaderListItems|    ,0…ñ~     <li><a class="Button" href="http://www.asu.edu/">ASU Home</a></li><li><a class="Button" href="https://my.asu.edu/">My ASU</a></li><li><a class="Button" href="http://www.asu.edu/colleges/">Colleges &amp; Schools</a></li><li><a class="Button" href="http://www.asu.edu/map/">Map &amp; Locations</a></li><li><a class="Button" href="https://www.asu.edu/about/contact">Contact Us</a></li>}    DÜá‘      .mobile-header-hamburger~  Œ‹Ş.(      <ul id="mobile-custom-asu-header-links">  ]ÕX      </ul>€     ¼u×      submissions   Ï‚Éå      speed_grader‚  ¶`      #speedgrader_iframeƒ   Õ\çy      headless„  2‹]d      <div class="asuHeaderPadding"></div><div id="custom-asu-header-links"><ul id="custom-asu-header-ul">…  è5ˆÔ      </ul></div>†   hš%Ñ[      div.public_options > input#course_indexed, div.public_options > label[for="course_indexed"]‡   ^@§e2      div.public_options > input[name="course[indexed]"]ˆ    ±ˆĞë      a.submit_error_link‰   (e›s      If you reached this page through a link in your course, please reach out to your instructor and include this URL ( Š   ‰³à¨Û       ), as well as what you were attempting to do when you encountered the error.<br><br>If this link was not in a course, or you need assistance with other issues, please reach out to the ASU Help Center at 1-855-278-5080.‹   ¯69#'      a.submit_error_link, #submit_error_formŒ   Âé„      acc   ƒö¼      custom-asu-card-header    ~›İ&      panel     s­,ô      custom-asu-card-body  EŞS      onclick‘   B9ºÀ      preventDefault’    ®ÓMï
+      setClasses“     Ù¶z	      classList”     µÏ^      contains•  Œ¨Px      active–    dJ!S      iTag—  ,ú      asuSetClass˜   óKÄ      icon-arrow-open-up™    VWêÖ      icon-arrow-open-downš  Ogµ      toggle›    ö+      removeClassœ   BŒ|      addClass  ^Mk      els   îìÁ      fnNameŸ    ŸC¬h      .custom-asu-nav-item   Òôô;      .active¡   üz×½      currentTarget¢     pu¶      tabContentId£  y‡´n      hash¤  åÿ>      show active¥   EŠ$      asuCreateCopyButton¦   ÆYÕ°      highlightDiv§  ëÆÚ      copy-code-button¨  Êÿ\      Copy©  lƒ¤cZ      float: right; height: 35px; border-radius: 5px; color: #525252; border: solid 1px #c7cdd1;ª    |l*      asuCopyCodeToClipboard«    ğÙ      asuAddCopyButtonToDom¬     ş^Ö
+      codeToCopy­    Æ       :last-child®   ¹ã+	      navigator¯     “J®      permissions°   XN_ÿ      query±     WƒªÑ      clipboard-write²   ùGÍÒ      state³     ÍGg      granted´   §úé`      promptµ    µIÔ²	      clipboard¶     zıœú	      writeText·     £œ$ğ      asuCopyCodeBlockExecCommand¸   (      asuCodeWasCopied¹  DÉÀ      textAreaº  L¿›      contentEditable»   æèî      readOnly¼  Øò£­      copyable-text-area½    ÚèS#      createRange¾   Åru      selectNodeContents¿    9ïx      selÀ    ãqö      getSelectionÁ  Ns      removeAllRangesÂ   ³§Â      addRangeÃ  #«,      setSelectionRangeÄ     <ƒb      execCommandÅ   ¥ÿ´      copyÆ  ùúK      removeChildÇ   Äºá%      blurÈ  ùªñ      Copied!É   YCù¸      wrapperÊ   ôly      highlight-wrapperË     kHĞø      .custom-asu-code-highlightÌ    ¢„
+      readyÍ     ¿­Ïq      accessibilityÎ     X:      tidleÏ     ¨æ1      \sĞ    R‰Do      toLowerCaseÑ   ªÛq      menuÒ  ›\¶U      #menuÓ     VXßJ      iconÔ  "'      <li>Õ  “¥A      global_nav_Ö   ¤ÑQ@      _menu×     ·W      ic-app-header__menu-list-itemØ     uüÊ      <a id="global_nav_Ù    Ş¤.      _link" href="https://accessibility.asu.edu/canvas-student-accessibility" class="ic-app-header__menu-list-link" target="_blank">Ú   ÂsÄaK      <div class="menu-item-icon-container" role="presentation"><span class="svg-Û   J6Õ	      -holder">Ü     mwsÌ     <svg version="1.1" class="ic-icon-svg" id="Layer_1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" x="0px" y="0px" viewBox="0 0 26 26" style="enable-background:new 0 0 26 26;" xml:space="preserve"><g><path class="st0" d="M20.5,8.5c-4.5,1.7-9.8,1.7-15,0L4.6,8.3v3.2L5,11.7l0.1,0.1c1.7,0.5,3.2,0.9,4.6,1.1v9.7h3.4v-5h0.5v5h3.3 v-9.8c1.3-0.2,2.6-0.5,4.1-1.1l0.4-0.2V8.3L20.5,8.5z M15.5,11.6v9.7h-0.7v-5h-3.1v5H11v-9.7l-0.6,0c-1.3-0.2-2.7-0.5-4.4-1V10 c2.5,0.7,4.9,1.1,7.2,1.1c2.3,0,4.6-0.4,6.9-1.1v0.8c-1.2,0.4-2.5,0.7-4,0.9H15.5z"/><path class="st0" d="M13.2,9.1c1.6,0,2.8-1.3,2.8-2.9s-1.3-2.9-2.8-2.9c-1.6,0-2.9,1.3-2.9,2.9S11.6,9.1,13.2,9.1z M13.2,7.9 c-0.9,0-1.6-0.6-1.6-1.6c0-0.9,0.7-1.5,1.6-1.5c0.8,0,1.5,0.6,1.5,1.5C14.7,7.2,14.1,7.9,13.2,7.9z"/><path class="st0" d="M13,0.6C6.2,0.6,0.6,6.2,0.6,13S6.2,25.3,13,25.3S25.3,19.8,25.3,13S19.8,0.6,13,0.6z M13,24.1 c-6.1,0-11-5-11-11.1s5-11,11-11s11.1,5,11.1,11S19.1,24.1,13,24.1z"/></g></svg>İ  ¨Äl      </span></div>Ş     wˆmR4      <div class="menu-item__text">Accessibility</div></a>ß  ÜTA—      .svg-à     r¼72      -holderá   Òw5f      svgIdâ     ±Pù      _svgã  ïäÊÁS      ic-icon-svg menu-item__icon ic-icon-svg--apps svg-icon-help ic-icon-svg-custom-trayä   ":k      pathå  ó’
+      removeAttræ    ŞšÃ      asuGA/i[r]<ç   û¼S      paginateAPI/<è     ¼K      paginateAPI/</<é   >êF      klPageContentCheck2/<ê     Lo÷'      asuInactivePeoplePage/mutationObserver<ë   à á3)      asuInactivePeoplePage/mutationObserver</<ì      ‹ÑK      asuInactivePeoplePage/<í   Û"®6      asuAddAlertForManualAdds/<î    ³Ş;      asuCreateAlertDiv/<ï   ŒµQt"      asuCheckForNewlyDeactivatedUsers/<ó    {Ãr      asuWhatAccountAreWeIn<ô    —åb      asuWhatAccountAreWeIn</<õ  ùp	Õ      asuFilterTermsBasedOnLocation/<÷   ÌPUÎ;      asuFilterTermsBasedOnLocation/</asuBuildTermFilteringList/<ù   çØ‹ğE      asuFilterTermsBasedOnLocation/</asuCleanTermsOnPage/mutationObserver<ú     <‰ÂUG      asuFilterTermsBasedOnLocation/</asuCleanTermsOnPage/mutationObserver</<ı   ôéÁ      asuCheckGlobalNav/<ş   'ƒ™s'      asuUpdateGlobalNav/globalDashboardItem<ÿ   hÇoc+      asuUpdateGlobalNav/globalAccessibilityItem<    QGw      addCourseSettingLinks/<   ®BW      addCourseSettingLinks/</<     )d%	      observer<     Xˆ¬ñ      observer</hasAimlIframe<  tSh      hasAimlIframe<    fˆĞ      acc[i].onclick    OÀ7Ö      asuCreateCopyButton/<     ÑÿÍh      asuCodeWasCopied/<     P        P             ï%,‰                                                                                                      åa                                                                         	                 
+                 	                           	                                  
+                                                                                                                                                                                                                                                                                                                                          "                 #               $                 #                                                    (                 )               *                                   ,                                                     /                0                 /                2                              !      4                5           "                  %      7                8           &      9                :           '      ;           (      :           )      =                 >           *      ?           +      @                A                B           ,      C                =                E                F           -      8           .                  /      I                             0                 1      L                M           2                  3      O                 P                Q           4      Q           5                  6      T           7      U                 V               W           8      W           9      Y                                  [                            #      ]                 ^           $                  :      `                            ;      b                c           C      d                 c          E      f                g           F      c          G      i                 j                c           H      l                 c          I      n           J      c           K      p                 c           <      r                 c                t           =      c                v                w                x                y                c               {           >      |                 }           ?      {           @      c           A      c                c                ‚           B      ƒ                c           D      …                 c           L                  M      ˆ           N      ‰                Š           O      ‹                 ³OŒc         j   ¦    #  .   B  ~  i  *  n       '  Ù  ‚  h  S  u  Ó  ú    ƒ  Í     9               i `s  o  g  r `a  m                                                   d                               i  c  8  
+              (  )              ³  {              +  ,  P-  PF  `.               1  ·  2               3               6               5               7               1  ·  8               3               C  PD              E               T  P                                                             k  x  y               m              i                                                                                 n  `            †  P„               ˆ                               D               ‘               T  P                             ”  ›                               D              «               T  P                             ¯  °               ±  ³                                               ¾              e  t                Â              e  t                                Ä                t                                Ô  PÕ  P×  P             ’               Ü  Ş  Pß  â               1               á                               k               m               ã               ä  P             ë                t                ì  í               ş  P             ÿ                t                ƒ                                                                P              3  P                                                          %               t                 t                                ’               Ô               0 P2                                   4              ; < ? 5               w  d  s  l  i               f  j  U              ‘ `             „               1                              D H                — P¥ Pª P· P¸ P« P             L O PV { PŒ P P              —               i               ¦ P              œ  P                             œ  P¦ Pn  `            ’  ¬             _               ¬ ¦              ¹   ¿              œ  P                             œ  ¦              É              u                Q              c              •              m             i               o              q              r              u Pv                              v              w              w                             i              i                t                ’ –              e               ¢              ¦                                              Ë  Î PÑ Ó                              ) á ¯Â0°Î      Ñ      Ø      Ø      Î      Î      /     P     Ø      Î      s     t     Ï    Iô$KE®úš   
+      î  ß     
+    î  ß         z  {  |        z  |  {  ÷  ø  ù             
+    4    
+     4    
+     4  
+   ‚        ¸    €øÿ    º    €øÿ    »    €øÿ    ¼    €øÿ    ½    €øÿ    ¾    €øÿ    ¿    €øÿ    À    €øÿ    Á    €øÿ    Â    €øÿ   
+    	                 6   €øÿ    H        :      ;      <      =      >      ?      @      A           8          Z    
+     {  ÷          3   È  ‡&Õª!«!P   p   v
+ó;p  Õ                         ß   <   µ   äo    ¾   ¾            y ä¾   <    N!   ä¾"   æL#   é¾!   L$   3%   (y ä µ&   ä<(   µ'   äµ)   ä¾+   ‚o,   è  ƒ µ*   ä¾   æL-   é.   o/   y ä¾   æL-   é0   o1   y äo2    y  ä§E`K!`F.” ÿÿÿ÷P41`07` ‘ ÿÿÿóP4:G€  –!`K€ O`G€ ÿ`	ÿÿÿô9€ 0`%5€ AA€ 0P4€ D`‘  ÿÿÿçPD€  `F€ ÁPP€(  ¥á–W(  È                        À  Ñ   äÀ Ñ   äÄ   Ä   N   äÄ   Ä   Ä   Ä   MŸ   ™   äo   ™   PäÄ   Ä   M¾   ‚è  ƒ  ,N   ä¿ æL   é¿ u Ï ä¿ æL   é¿ u MÏ ä¿ N   ä¿ ¿ N   ä¿ L	   æL
+   é¿ ¿ y ä§’@`@`¢@ZJ`
+ÿÿÿòP
+ÿÿÿëPI`J`,`ÿÿÿğPP€   'úV³€   K                        áĞ   äÄ   Ä   MÄ   Ä   ML   Ÿ   ™   äj    ™   N   æL   éÁ   y ä§F`¼ ÿÿÿûPDP€€€œ  *¨Œ           	             ³´   ´  ´  ä¿  ¿ ¿  ¿ MŸ   ™   äj    ™   Pä¿  ¿ MæL   é;   ¾   ‚è  ƒ  æL   éu  >      >   y ä¿ æL	   é¿ u M´   ä¿ æL
+   é¿ u ´  ä¿    œ   ™      ¿ 3(›   ™      ™   ´  äÁ  N   äÁ     ¿ 3(Á  3(N   äÁ   L   æL   éÁ  Á   y äÕ§ N`¤ `
+%
+P
+P(JPD`
+ÿÿÿëP*`
+ÿÿÿòP(`˜  `+`	6,` ÿÿÿğPP€œ           ÿÿÿÿô   °¾€Lä   ’                       ³´   ´  ä¾   ‚è  ƒ  ´   äÁ   æL   éÁ   æL   éu  ¿ ,<,<,è,(y ä   Á   æL   éu  3(´  ä¾   ¿  3   (¿ 3(	   (Á  3(
+   (N   äÕ§ *`’ `
+P‘ ÿÿÿêP$`P*`
+	
+“P€€ô          ‘   ÿÿÿÿô  ikğµ¤  &                      $³´   ´  ´  ´  ä¿  3   (´  ä¾   L   æL   é   u ´  ä ´   ä ´  äĞ   äš   Á   Á  L   œ²   ™   Á  Á   MĞ  äš	   Á  æL   éu 	   œ#   ™   Á  æL
+   éu Ğ  ä›Çÿÿÿ™   Á  æL   éÁ  u  œ-   ™   Á  æL
+   éÁ  L   Á  L   u ¦Õ§™   Á   2*Ğ   ä›?ÿÿÿ™      ¦Õ§Õ§ ’ ` /`– P&`f” `.fP“ `P’@
+	`
+ÿÿÿøP `		ÿÿÿéP3H`•@`T€€€ô  Ô         %  ÿÿÿÿ                 #                }   >          Q   Æ   T  µœı$  ¶                       ³´   ´  ä ´   ä ´  ä¿  æL   é¿ u ÿœ‚   ™   ¿  æL   é¿ u ¿ L   ((Ğ   ä¿  æL   é   Á   (u Ğ  äÁ  ÿœ   ™   ¿  L   Ğ  ä™   ¿  æL   éÁ   Á  u ¦Õ§™   ¦Õ§Õ§ &`
+ÿÿÿøP `
+ÿÿÿøP `ÿÿÿóP(	`‘@`’@
+`
+ÿÿÿïP3H`T€T         µ   ÿÿÿÿ    ª              ³            ÚİğĞ  †                      ³´   ´  ä³¶   ¶   ¶   ä¿  æ œ   ™   ä   ™   ´   ä¿ ¶   ä¿ æ œ   ™   ä   ™   ¶   ä¿ æ œ   ™   ä™   ¶   ä¿ ´  äÁ      œF   ™   ¾   æL   é;   Á   >      >   u æL   éo	   y ä›¨   ™   Á  æL
+   é   u æL   é   u  œQ   ™   ³´  äÁ  æL
+   é   u æL   é   u ´  äÁ  æL   éo   y äÕ›.   ™   Ä      œ   ™   Ä    Ä   y ä™   §­ª0¢”0 `” `%)JPJÿÿÿûPN` PP&` PP(`ÿÿÿøPO(`• `ÿÿÿÿP9+P       B   ÿÿÿÿ°   ÜñÜ¡    T                       ³´   ä¿  L   ´   äÄ   ¸    ¿  Á   y ä¾       Ä   Ä   ¸   ¿  L   ¿ y äÕ§ &`-`ÿÿÿùP$`
+ÿÿÿÍP%P€°          S   ÿÿÿÿ  TÙ²7ô   š                       ¿  æL   é   u  œ€   ™   ³´   ä¿  æL   é¿  æL   é   u (¿  æL   é   u u ´   ä¾   æL   é;	   Á   >
+      >   u æL   éo   y äÕ™   § `P&`*P%PCPH	`%)JPJ	ÿÿÿûPJP€        v   ÿÿÿÿ¸   ş9«¨   [                       ³´   äÄ   ¸   ¿  L   (´   äÄ   ¸    ¿  Á   y ä¾       Ä   Ä   ¸   Á   ¿ y äÕ§  &`
+.`ÿÿÿùP$`%%*$CPE
+	P¸          Z   ÿÿÿÿ,  Q=Ş  N  	             A      À  Ñ   ä³´   ä´   ä¾       u L    *   ™   ä¾       u æL   éu  L    ™   œ   ™   Ğ   ä›p  ™   ¾       u L    *   ™   ä¾       u æL   éu  L    ™   œ   ™   Ğ   ä›  ™   ¾    	   u L    œ   ™   Ğ   ä›ã   ™   ¾    
+   u L    œ   ™"   Ğ   ä›´   ™"   ¾       u L    œ   ™'   Ğ   ä›…   ™'   ¾       u L    "   ™,   ä¾   æL   é   u  ™/   œ   ™0   Ğ   ä›/   ™0   ¾       u L    œ   ™5   Ğ   ä™5   Á   œ.   ™6   ¾   æL   é   y ä¾    y  ä›<   ™;   ¿ 2œ,   ™=   Ó   ¿ (¶   ä¾    o   dy äÔ™A   Õ§	'&`6 `P• [
+P™ `@
+`P• [
+P™ `@`P” ` `P” ` `P” `@`P• ‘P•@`@`P@ `K#`.`‘ P$`” ` %`+`5-B(P;/P€€€,     	   D  ÿÿÿÿ   *         |   Òe|   <                          ¾   æL   é   Ä  3(   (y ä¾    Ä  Ä   ¸   y ä§ `,	"MPD`
+ÿÿÿåP$P€€€  ( ¤±  t                 8        ¾       u æL   é      ¾   L   L   3(y ä¾    	   u æL   é   
+   ¾   L   L   3(y ä¾       u æL   é      ¾   L   L   3(y ä¾       u æL   é      ¾   L   L   3(y ä¾       u æL   é      ¾   L   L   3(y ä¾   æL   é   u  0   ™,   ä¾   L   æL   éu  æL   é   u  ™3   œ   ™4   ¾    y  ä¾    y  ä™8   § `EP:%|‘@PD`EP:
+%€  ”‘@	PD`EP:%E‘@PD`EP:%T‘@PD`EP:%e‘@P4! `‘ 	P‘ ‘PP” `*`?(P€X  óìÍFH  Í                        ³´   ´  ´  ä¾    y  ä¾   ‚o   è  ƒ ´   ä¾   æL   é   u ´  ä;   >	   >
+   >   ´  äÁ   æL   éÁ  Á  y ä¾          y ä¾    y  ä¾    y  ä¾    y  ä¾       u æL   éo   y äÕ§ N`J`	ÿÿÿëH1`‘ 	PH3`K5`ÿÿÿíPD7`E7*PD;`*`*`J?`P*E?FP5DP€X         Ì   ÿÿÿÿĞ  ô…s4°  )                (      $³´   ä¿  æL   éo   y ä ´   äĞ   äš   Á   ¾       u L   œß   ™   ¾       u Á   MæL   é   u    ™   ¾       u Á   MæL	   é   y ä¾       u Á   MæL
+   é   o   y ä¾   æL   é   ¾       u Á   ML   L   L   L   L   L   3(y ä™&   Á   2*Ğ   ä›ÿÿÿ™(   Õ§ &`
+ÿÿÿøP4
+F`&f$[“00 	`P,U@	`P,V$	`P,%
+ÿÿÿæPD 	`,%[¥@ PI`–@*P€€€Ğ  À         (  ÿÿÿÿ       %   ı   L   {\'=L                             ¾   œ   ™   ¾    y  ä™   §@`/	`OP€8   œ´V"8                             ¾    y ä§ ` P$	P€€8   É¾YÌ8                             ¾    y ä§ ` P$P€€¼   d—Ñ_¼   w                          º   ¾       u Í   ä¾      œ2   ™   º   Í   ä¾       ¾   my ä›    ™   º   ¾      Í   ä™   § ` P)`•@`,`ÿÿÿêP@`›0
+P€0  f¼Ë  ˆ               "       9ŠÑ   ä®Ó   ³´   ä¾    ¾   L   L      u ´   ä ¶   ä¾   æL   é	   Á   3(o
+   u ”•   ™   Ä  Ä  “   Œ   —™   äÄ       ™   äÄ    ™   œ¬   ™   Ä   æL   é   u `   ™   äÄ   æL   é   u @   ™   äÄ   æL   é   u     ™   äÄ   æL   é   u ™   œ(   ™   ¾       u æL   éo   y ä™"   ³´   äÔ ¦¥Ä   ‘¦Ä   ›   ™"   ±Ä   ’¦Ä   ™"   §+`&E8P8G`ÿÿÿÖPª@`ª0 `‘ P/‘ P/‘ P/‘ P“ `P
+ÿÿÿúP0­P€€€0       v         M  ÿÿÿÿ           g  P   HÈÁ™P   $                         ¿  L   æL   éu  Ä   ¸   äÑ   ä§ `P” P€T   
+ÂÔT   "                          ¾   œ   ™   ¾    y ä™   § `‘ `PIP€€€x  ì6H  ™                )      ³´   ä¾   æL   é   u ´   äÁ   L    œF   ™   ¿  œ,   ™   Ó   ¿  (¶   ä¾    o   dy äÔ™   ›&  ™   ³´  ´  ä¾   æL
+   é   u ´  äÁ     N   äÁ     N   äÁ     N   ä¾   æL
+   é   u ´  äÁ     N   äÁ     N   äÁ     N   äÁ  L      N   äÁ  æL   éÁ  y ä¾   L   æL   éÁ  y ä¾   æL   é   u æL   é   ¾   y ä¾     Á   u æL!   éÁ  y äÕ™)   Õ§ &`‘ 	P(`– 	` %`+`5BP”@	
+*`‘ 	P(`/`/`+`‘ 	P(`/`/`/`” `ÿÿÿôPD`‘ ÿÿÿôP$`,U*"
+ÿÿÿæPD`ÿÿÿÿP
+ÿÿÿùP;P€€€x         ˜  ÿÿÿÿ   J          	   v         D   ‡»•ïD                             ¾    Ä   ¸   y ä§ 	`
+ÿÿÿÿP$P`   â(ÂÎ`   -                          ¾       u æL   éy  äº   ¾   (0Í   ä§ `P
+P$`“P€€€  ¶ĞX:`  ë                       ³´   ä¾   #   ™   ¾   æL   é   y ä ¦Õ§™   ´   ä¾       u æL   éu  æL   éu  æL	   é
+   u L    œ   ™   Ğ   ä™   Á   œ#   ™   ¾    y  ä¾    y  ä›<   ™   ¿  2œ,   ™   Ó   ¿  (¶   ä¾    o   dy äÔ™   Õ§ &`/`‘ P$`1H`6 `P*P*P*U” `K`.`*`” ` %`+`5BP;P€€€         ê   ÿÿÿÿ    -             Ç          D   ©l#D                             ¾    Ä   ¸   y ä§ `!
+ÿÿÿÿP$Pˆ  ¨WÇœx  é                       ³´   ´  ä   ´   ä   ´  ä¾   œg   ™   ¿    œ*   ™   ¾    ¿  u æL   éÁ   y ä›%   ™   ¾    ¿  u æL   éÁ   y ä™   ›]   ™   ¿    œ*   ™   ¾    ¿  u æL   éÁ  y ä›%   ™   ¾    ¿  u æL   éÁ  y ä™   Õ§  ` `J`/	`“ `ÿÿÿÿP
+ÿÿÿùP `ÿÿÿÿP
+ÿÿÿúP“@`“ `ÿÿÿÿP
+ÿÿÿùP `ÿÿÿÿP
+ÿÿÿúP:P€ˆ         è   ÿÿÿÿÀ   Oƒ+À   y                          ¾   œ<   ™   ¾       u æL   éu  æL   éu  æL   éy  ä›7   ™
+   ¾       u æL   éu  æL   éu  æL   éy  ä™   § `/`P*P*P*P `P*P*P*P9P€Ø   ’µKÆØ   ƒ                          ¾       u æL   é      y ä¾       u æL   é      y ä¾       u æL   éo	   y ä¾       u æL   éo
+   y ä§ `P” )P$`PE9PD`P*E-PD`P*E9P4P€   q   U                      ãĞ   ä¾    Á   u æL   é   ¿  L      œ   ™      ›   ™      ™   y ä§&`ÿÿÿÿP%	±@PDP€€€   q   U                      ãĞ   ä¾    Á   u æL   é   ¿  L      œ   ™      ›   ™      ™   y ä§&`ÿÿÿÿP%	±@PDP€€€T   }€ŠT                             ¾       u æL   éo   y ä§ `P
+,ÿÿÿñP4P€€€´  &$ë´  7              %        ãĞ   ä¾    Á   u æL   é   u    œt   ™   ¾    Á   u æL   é      u æL   é   u æL   é	      u æL   é
+      y äº   Í   ä›o   ™   ¾    Á   u æL   é      u æL   é   u æL   é	      u æL   é
+      y äº   Í   ä™   ¾    y  ä¾    y  ä¾       ¾   my ä§&	`ÿÿÿÿPP“ `ÿÿÿÿP*
+Z*
+U*
+Z*
+Z$`– `ÿÿÿÿP*
+Z*
+U*
+Z*
+Z$`‘@`*`J`ÿÿÿêP$P\  ~ş²®L  Ù   	                   À  Ñ   än   æL   é¾   L   L   u œX   ™   ³´   ä¾    ¾   L   L      u ´   ä¾	   æL
+   é   Á   3(o   y äÕ›Y   ™   n   æL   é¾   L   L   u œ1   ™   Ä    ¾    ¾   L   L      u y ä™   §)`ÿÿÿûPF`&E:PH`ÿÿÿÖPO`ÿÿÿûPM`” ÿÿÿâPÿÿÿÿP9P€€\     1   I   ÿÿÿÿp   zÕèbp   2                         ¾   æL   é   ¿  L   3(y äÄ    ¿  L   y ä§ `
+ÿÿÿãP$`ÿÿÿÿP$P€€Ø   ºß²'È   u                         Ó    ¶   ä   ¶   ä¾   ¶   än   æL   é¾   L   L   u œ   ™   ¾	    y  ä™	   ¾
+   æL   éo   o   y äÔ§ '`+`K`"ÿÿÿûP-`O
+`,E}E
+P5€  P€€€Ø         o   ÿÿÿÿp  Iìuã`  å          	             Ó   ³´   ´  ´  ä¿  Ä  ¸  äÑ  ä¾   æL   é   Ä  3(y äÄ  ¸  æL   é¾    Ä  
+u u ÿ œ5   ™
+   ¾   æL   é   y ä   Ä  ¸  äÑ  ä™   	   ´   äj    ¶   äo
+   ´  äo   ´  ä¾    Á   Á  Á  y äÔ§ “ `” `ÿÿÿçP$`‘ 	ÿÿÿ÷PÿÿÿøP 	`‘ P$	`›@`*`K
+)`J#`Jp`	ÿÿÿÛP%Pp        ß   ÿÿÿÿL   d¹«ÔL                            ¿  L   æL   éo   y ä§@	`ÿÿÿøPD	P€€œ   GUòœ   f                         ¿  L   æL   é   u ÿœ(   ™   Ä   ¸   ¿  L      Pä›#   ™   Ä   ¸   ¿  L      Pä™   § `” 
+P `£ `@	Pø  Ë›¥)Ø  D                ,       n   æL   é¾   L   L   u œy   ™   ³´   ä¾   ‚o   è  ƒ ´   äÁ   æL	   é¾
+   L   ;   >   >   >   >   >   >   y ä¾    y  äÕ›¬   ™   n   æL   é¾   L   L   u œj   ™   Ó   ¾   æL   é   ¾       u L   3(   (y ä ¶   ä¾       u æL   éo   y äÔ›   ™)   ¾   æL   é   y ä™,   § `"ÿÿÿûPF$`	ÿÿÿëH2`
+%&&&&&F2PD;`•@=`ÿÿÿûPE?`,%[F?P4D'`P*EE8P?V `‘ PIYP€€€ø     (   j   ÿÿÿÿ   É   V   ÿÿÿÿD   æ’nD                            ¿  æL   éo   y ä§ `
+ÿÿÿøPD,Pä   İA¯‚Ô   ‹                        Ó    ¶   ä¿  L   L      Ÿ   ™   ä¿  L   L      ™   œB   ™   ¿  L   L    œ(   ™   ¾	    
+   u æL   éo   y ä™   Ô§  `¢ `š `EPJ	#ÿÿÿòPJ*Pä         …   ÿÿÿÿœ  ÿ[wåŒ  Û              7       ãĞ   ä³´  ´  ä¾    Á   u ´  äÁ  ML   L   L   L   L   ´  äÁ     Ÿ?   ™
+   äÁ     Ÿ*   ™   äÁ  	   Ÿ   ™   äÁ  
+   ™   œ@  ™   ¾    Á   u æL   é   u Ä   ¸   äÑ   ä¾   æL   é   Ä   3(   (Ä  ¸  3(   (Ä  ¸  Ä   M3(y äÄ  Ä  Ä   MŸ   ™    äÄ      ™!   œ'   ™"   ¾    Á   u æL   éy  ä›"   ™&   ¾    Á   u æL   éy  ä™*   ¾    Á   u æL   éu  L      œ,   ™1   ¾    Á   u æL   éu  æL   éy  ä™7   Õ§*&`ÿÿÿÿP `¤0 `•••™ `ÿÿÿşPP” `,%’ -’@P4 `—š `ÿÿÿÿP
+P `ÿÿÿÿP
+PI`ÿÿÿÿP
+P˜ `ÿÿÿÿP
+P
+	PJPœ        Ô  ÿÿÿÿ\   8\  ï                       ãĞ   ä¾    Á   u æL   é   u Ä   ¸   äÑ   ä¾   æL   é   Ä   3(   (Ä  ¸  3(	   (Ä  ¸  Ä   M3(y äÄ  Ä  Ä   MŸ   ™   äÄ   
+   ™   œ'   ™   ¾    Á   u æL   éy  ä›"   ™   ¾    Á   u æL   éy  ä™   §&`ÿÿÿşPP” `,$’ -’@P4 `—š `ÿÿÿÿP
+P `ÿÿÿÿP
+PIP@   w\T@                             ¿  Ä   ¸   äÑ   ä§ `” P€€€   §·¦$ğ  4                M       ³´   ä;   ´   äÁ   ¾       u æL   éu  æL   éu  æL   éu  æL   éu  æL   éu  æL   éu  æL   éu  æL   éu  æL   éu  æL   éu  æL   éu  N   äÁ   Á   L   æL   éu  L   N   äÁ   Á   L   æL   éu  L	   N	   äÁ   Á   L   æL
+   é   u N   äÁ   Á   L   æL
+   é   u N   äÁ   Á   L   æL
+   é   u N   ä¾       u æL   é   y ä¾       u æL
+   é      u æL
+   é      u æL
+   é   Á   L   u æL
+   é	   Á   L	   u æL
+   é   Á   L   u æL
+   é   Á   L   u æL
+   é   Á   L   u æL
+   é      u æL
+   é   y äÕ§ &`*`P*P*P*P*P*P*P*P*P*P*P*P)`” P.`” P.`™  P)`™ !P)`™ &PI`P*P$`P*Z*Z*ÿÿÿõP*ÿÿÿôP*ÿÿÿóP*ÿÿÿòP*ÿÿÿíP*Z*WP€€          3  ÿÿÿÿH   ^&HoH                             ¾       u æL   éy  ä§ `P
+PP€€Ä   ±%ĞO¤   Z   	              	      À Ñ   äÓ   ¿  "œ#   ™   ¾   æL   é   y ä ¦Ô§™   ¿  (¶   ä¾    o   dy äÔ§	%%` `‘ P$`1H`K`5BP5PÄ         K   ÿÿÿÿ    6          Ì   ¹›šIÌ   y                          ¾       u L   œ?   ™   ¾   æL   é   Ä   ¸   3(y ä¾    Ä  y ä›#   ™
+   ¾    Ä   ¸   Ä  y ä™   § 	`P• `'ÿÿÿÕP$`ÿÿÿÿP `
+
+ÿÿÿõPIP€   U[?€  ´                9      ³´   ä¾       u ´   ä¾       u L   œ  ™   ³´  ´  äÁ   æL   éu  æL   é¿  y ä¾    	   u æL
+   éo   u æL   é   u ´  äÁ  æL   éu  æL   éÁ  æL   éu  y ä¾    	   u æL
+   éo   u æL   éu  æL   é   u ´  äÁ  æL   é   u æL   éu  æL   é   y äÁ  æL   é   u æL   éu  æL   é   y äÁ  æL   é   u æL   éu  æL   éy  äÁ  æL   é   u M   N   äÁ  æL   é      y äÕ™9   Õ§ &`EPH`P” 0*`P
+ÿÿÿùPD	!`E	"PJÿÿÿùPJUH`P
+PÿÿÿãPD%`E&PJÿÿÿùPJP*UH`+U*P*UD#`+U*P:'E&PD*` P
+P
+PD,` PK/`E/P;4P€€€          ³  ÿÿÿÿ   8   u      X   (ĞÍÄX   %                        ãĞ   ä¾    Á   u æL   éu     ¤§&	`	ÿÿÿşP
+P)Q€X   (ĞÍÄX   %                        ãĞ   ä¾    Á   u æL   éu     ¤§&	`	ÿÿÿşP
+P)Q€Ä   ÕÔPÊÄ   u                          n   æL   é¾   L   L   u *   ™   än   æL   é¾   L   L   u ™   œ   ™    ¤™   ¾   æL   éo	   y ä§ `ÿÿÿûP/ÿÿÿûP“@`1,F`ÿÿÿûP4,P€€°  )_ør€  ş                       ³´   ä¿  ´   ä¾   æL   é¾    Á   
+u u ÿ œ   ™    ¦Õ§›º   ™   Ó   ³´  ä   ¶   äj   ;      >	   
+   >   k    ;      >	      >   k   ;      >	      >   k   ´  äÁ  æL   éo   y äÁ  æL   éu æL   éo   y äÔ™   Õ§ &!`(	`	ÿÿÿ÷PÿÿÿøP `A$M+`+`%	
+/	
+/	
+”@`ÿÿÿøPD`P
+ÿÿÿøPK$P€€€°         ı   ÿÿÿÿ    <             L   «       \   ¨¹,\   +                        ¿  gæL   Ğ   ää¾   æL   éÁ   u N   ä§ 	`ÿÿÿñP*P€ü  ”O|ì  a         
+       #      ¿  gæL   Ğ   äæL   Ğ  ää³´  ´  ´  ´  ä¾   æL   éÁ   u ´  ä¾   æL   é   u L   Ÿ.   ™
+   ä¾   æL   é   u L   æL	   éu  ™   ´  ä¾
+    Á  u ´  ä¾   æL   é   u ´  äÁ  Ä   ¸   3   (Á  3(N   äÁ     N   äÁ  Á  N   äÁ  L      N   äÁ  œ"   ™   Á  æL   é   Á  y ä™   Á  L   æL   éÁ  Á  L   y äÕ§› ’ `ÿÿÿñP `‘ 	P“ ‘P3P-#`ÿÿÿÿP(`‘ 	PH	`‘ 2,	`/	`.	`”@`.`  ÿÿÿåPI	` $	ÿÿÿíP%Pü        E  ÿÿÿÿ   ğaP›   ¨                       ³´   ´  äj      k    ´   äÁ   æL   é¿  L   u Ÿ   ™   ä¿  L   L   ™	   œ   ™
+    ¦Õ§™
+   ¿  L   L   ´  äÁ     œ   ™   ¾   L	   æL
+   éy  ä™   Õ§ *`”@	`ÿÿÿ÷P@`AH`’@	`” `‘ PJP€€          §   ÿÿÿÿ    `          Ä  ÅBéô  à	                B      $Ó   ³´   ´  äo   Ñ  äo   Ñ  äo   Ñ  äo   Ñ  äo   Ñ  äo   Ñ  ä¾   æL	   é
+   u ´   än   ¶   äÁ   æL   éo   y ä¾    y  ä¾    ¾   ¾            y ä¾   L   ´  ä¾             ;   Á  >   y ä¾          y ä¾       u L    !   ™   ä¾        u L    ™"   œş  ™#   ¾       u æL!   éu  æL"   é¾       u æL!   éu  æL#   é$   	u u %   Ÿ]   ™1   ä¾       u æL!   éu  æL"   é¾       u æL!   éu  æL#   é$   	u u &   ™>   œ@  ™?   ¾   L'   æL(   éu  æL"   é¾   L'   æL(   éu  æL#   é$   	u u ¾       u æL!   éu  æL"   é¾       u æL!   éu  æL#   é$   	u u œ¥   ™Y   ¾   ¾   L'   æL(   éu  æL"   é¾   L'   æL(   éu  æL#   é$   	u u ¾       u æL!   éu  æL"   é¾       u æL!   éu  æL#   é$   	u u (N'   ä™t   ¾   L'   L)   æL"   éu *   œQ   ™{   ³´  ä¾   æL	   é,   u ´  äÁ  œ   ™   Á  æL   éo-   y ä™‚   Õ™‚   ¾   L'   L)   æL.   é/   u œŠ  ™ˆ   ³´  ä¾   æL1   é2   u ´  äÁ     ™Œ   äÁ  L    ™   œ<  ™   ³´  ä´  äš   Á  Á  L   œ  ™’   ³´  äÁ  Á  M´  äÁ  L5   æL6   é7   u œÀ   ™—   ³´  äÁ  gæL9   ´  ääÁ     ™™   äÁ  L:   ™š   œ|   ™›   ³´  äÁ  L:   ´  äÁ  L   œ    ™   Á  MæL<   éy  ä›1   ™¡   Á  L   œ   ™£   Á  MæL<   éy  ä™¦   Õ™¦   Õ™¦   ÕÁ  2*Ğ  ä›åşÿÿ™¨   Õ™¨   Õ™¨   n=   æL>   é¾   L'   L?   u Ÿ)   ™®   än@   æL>   é¾   L'   L?   u ™³   œ   ™´   ¾A    y  ä™¶   nB   æL>   é¾   L'   L)   u Ÿ)   ™¼   änC   æL>   é¾   L'   L)   u ™Á   œó   ™Â   ¾   L'   LD   %   œÔ   ™Ç   ÓE   ³´  ä¾F   ‚oG   è  ƒ ¶   äÄ   æLH   é¾   LI   ;J   >K   >L   y ä¾M   æLN   é¾   æLO   éP   u u æLQ   éoR   u ´  äÁ  œ;   ™Û   ¾   &   ¾   L'   L)   3(N'   äÄ   æLS   éy  ä™ã   Ô™ã   T   ¶   ä¾    U   u æLV   éoW   y ä¾   L'   L?   æL#   éX   u ÿy   ™î   ä¾   L'   L?   æL#   éY   u ÿM   ™ô   ä¾    Z   u L    ,   ™ø   ä¾   L'   L?   æL#   é[   u ÿ™ı   œ5   ™ş   ¾    \   Ä   3(]   (u æL^   é_   y ä™  ¾    `   u æL<   éy  ä¾    a   u æL!   éb   y ä¾    c   u æLd   ée   ¾   L'   3(f   (y ä¾    g   u æL<   éy  ä³´  ä´  äš  Á  ¾i   L   !œ]   ™  ¾    ¾i   Á  Mu L    œ$   ™#  ¾j    ¾i   Á  My ä›   ™'  Á  2*Ğ  ä›“ÿÿÿ™)  Õ¾   æL1   ék   u ¶   ä¾   æL1   él   u ¶   ä³´  ä´  äš/  Á  Ä   L   œ/   ™2  Ä   Á  Mon   No   äÁ  2*Ğ  ä›Áÿÿÿ™7  Õ¾    p   u æLV   éoq   y ä¾   æL	   ér   u æL   éos   y äÔ§ Ñ@`‘ 	P(`K`ÿÿÿøPD`J`&%EPD`/`• +%I 	PD#` PD&`P  Pš0( `P*
+P*\
+P‘ PÿÿÿÜP‘ [*
+P*\
+P‘ PÿÿÿÜP•03 	`‘ P*’ P‘ PÿÿÿØP#	[*P*\
+P‘ PÿÿÿÜP@<	`‘ P*’ P‘ PÿÿÿØP#[*P*[
+P‘ PÿÿÿßPOI`™ P“ FK`‘ 	P(	`.`ÿÿÿøPOs`› PFu`‘ 	PHw	`© `f” & `N{`• P&*`‘@~`§ 3&0` `– `P.`– `P–@x2`¡0€   `"ÿÿÿûP.#› ÿÿÿûP’ ` `ÿÿÿûP."› ÿÿÿûP’ 	`Ÿ : `	ÿÿÿëI€  ¥`
+%	&	F€  ¥PD€  «`,	‘ 	PC€  «#P ÿÿÿûP(`.	`
++— 	`	P?€  ¶ `+`P
+#ÿÿÿúP4€  À `› P‘ ›P‘ [– ›P• `&gM€  ÆP U `E€  ÌP P$`P7P `P*v’@€  ÒP `P
+,P `f• 	`
+ÿÿÿÿP” `ÿÿÿÿP$`J€  Ø8`–@€  ã`‘ 	P)`‘ 	P `f• `•@€  æ#`–@€ `P
+ÿÿÿúPD€ Q`,U*ÿÿÿøPPÄ  ”        Ú	  ÿÿÿÿ+   j  G       0   Ş  €      3   &  2     4   P  ò      8   †  ¶      ;   Ä  r      E   B  Å       h     „       m   F	  V              2            š  r          R	  D   4  0ÍM$  Ò                       ³´   ä¿  L   Ÿ   ™   ä¿  L   ™   ´   äÁ   #   ™   äÁ   æL   éÄ   ¸   u ™   œt   ™   ¿  L   œ6   ™	   ¿  æL      ¾   L   L   3((0N   ä›1   ™   ¿  æL      ¾   L   L   3((0N   ä™   Õ§ &`¥ 	`š #
+ÿÿÿúP’ `’@	`£@	`Ÿ@P€€€4         Ñ   ÿÿÿÿ|  ˜!9œ|                          ¿  L   æ   ¡1   ™   æ   ¡P   ™   æ   ¡‰   ™   ¢É   ™   ¿     N   ä¿  ¿  L   3   (N   ä›£   ™   ¿  L	    œ0   ™
+   ¿     N   ä¿  ¿  L   3   (N   ä™   ›Y   ™   ¿  L	    œ0   ™   ¿     N   ä¿  ¿  L   3   (N   ä™   ›   ™   ›   ™   § `Å0@`N`• `: `•@`N`š@`: `•@`N`š@`: `J!Pì   9'}Ü   ˆ                        ³´   ä¾   æL   é¾   æL   é   u u æL   éo   u ´   äÁ   œ@   ™
+   Ä   ¸   æL	   éy  ä¾
+      ¾
+   L   L   3(N   ä™   Õ§ &`,‘ 	PC%PJÿÿÿûP(`.`‘ 	P$`
++@P€€€ì          ‡   ÿÿÿÿ\   Ú²„V\   0                         ¿  L   "   ™   ä¿  L   æL   é   u ™   ¤ `§ P€€\   Ú²„V\   0                         ¿  L   "   ™   ä¿  L   æL   é   u ™   ¤ `§ P€€X   h\ìX   #                          ¾       Ä   ¸   3(   (y ä§ `!+’@PDP€€€ô  ™Ã*ä  Q                     ãĞ   ä³´  ´  ä¿  æL   éy  äÁ   L   æL   é   u ´  äÁ   L   L   æL   é   u ´  äÄ   Ä   ¸      	   y äÄ   Ä   ¸   
+   	   y äÄ   Á     	   y äÄ   Á        y äÁ  œ|   ™   Á   L   æL   é   y äÁ   L   L   æL   é
+   y ä¾    Á   u æL   é   u æL   é   u æL   é   y ä™   Õ§*`
+P$`• P)`š P(`” ÿÿÿÿP$`” ÿÿÿÿP$`ÿÿÿÿP$`ÿÿÿÿPD	`.	`• P$	`š "P$	`ÿÿÿÿP*U*U*UJPô        J  ÿÿÿÿÄ   ‡¤   Z                 	      $³´   ä´   äš    Á   ¿  L   œ4   ™   ¿  Á   ML   æ¿ Mé¿ y äÁ   2*Ğ   ä›¾ÿÿÿ™	   Õ§ 
+`f“ `“ ÿÿÿÿPD%`–@P€Ä   ´          Y   ÿÿÿÿ          G   ğ   ç×Ô¥à   „                       ³´   ä¿  æL   éy  ä¾       u æL   é   y ä¾    ¿  L   u æL   é   y ä¿  L   L	   ´   ä¾    Á   u æL   é
+   y äÕ§ &`
+P$`PP$`ÿÿÿÿPP$`’ `ÿÿÿÿPP%P€€€ğ          ƒ   ÿÿÿÿ  g† ‘ô   ˜   	                    À  Ñ   äÓ   ¾   æL   é   u ¶   äÄ      N   äÄ      N   äÄ      N	   äÄ   
+   N   äÄ   æL   é   o   y äÄ   Ä   Ä  y äÔ§	%`‘ 	P)` ` ` `+`‘ !ÿÿÿæPD
+`ÿÿÿ÷P%P€        ‰   ÿÿÿÿL   %©L                             Ä   Ä   ¸   Ä  u ¤ `
+ÿÿÿ÷P€€€À  ñ‰Ih  Û        
+             9À  Ñ   äÀ Ñ   äŠÑ   ä®³´   ´  äÄ   æL   é   u L   ´  ä ´   ä®¾   L   æL   é;   	   >
+   u ”•   ™
+   Ä   Ä   “   Œ
+   —™
+   Ğ   äÁ   L      Ÿ   ™   äÁ   L      ™   œN   ™   ¾   L   æL   éÁ  u ”•   ™   Ä   Ä   “  Œ   —™   ä›   ™   Ä   Á  Ä   y ä™   ›:   ™    ¦°³´  ä´  äÄ   Á  Ä   y ä³´  äÕ›   ™   ²¥ ¦Ä   Ä   y ä¦œ   ™   ª›   ™   ää™   ³´   ´  äÕ ¦¥Ä   ‘¦Ä   ›   ™   ±Ä   ’¦Ä   ™   §š *`‘ P!`‘ +
+ÿÿÿøP® `¸ 	`‘ $ÿÿÿöP´ 	`ÿÿÿóP™@
++`ÿÿÿóP˜ $`ÿÿÿÿP¬@­P€À    p  ‡           “  ÿÿÿÿ   @  %               I   ï          I   $             ¨  °  hCı¾                         ³´   ´  ´  ä¾   æL   é   u ´   äÁ      N   äÁ      N   äÁ   	   N
+   äÁ   ¿  N   ä¿ æL   éÁ   ¿ L   y ä¾   æL   éu  ´  äÁ  æL   éÁ   y ä¾   æL   éu  ´  äÁ  æL   éy  äÁ  æL   éÁ  y äÁ   æL   é	?By ä¾   æL   é   y ä¿ æL   éÁ   y äÕ§ .`‘ 	P(`/`/`/`-`
+
+ÿÿÿéP$`	P(`ÿÿÿíP$`P(`P$`ÿÿÿ÷P$` 	P$`‘ 	P$`
+ÿÿÿôP%P°           ÿÿÿÿx   QĞÚşx   <   	                     À  Ñ   äÄ   æL   éy  äÄ      N   ä¾    o   Ğy ä§)`PD`@`5CPD	P<   ©p¿I<                             Ä      N   ä§@` P€€à   0¤§Ğ   u                       ³´   ä¿ æL   é¿  ¿ L   y ä¾   æL   é   u ´   äÁ      N   ä¿ L	   æL   éÁ   ¿ y äÁ   æL
+   é¿ y äÕ§ &`
+ÿÿÿëP$`‘ 	P(`/`%	ÿÿÿêP$`ÿÿÿôP%P€€à          t   ÿÿÿÿ<   t»ã€<                            Ä   ¿  u ¤ `ÿÿÿÿP€X   q}áX                             ¾    ¾   u æL   éo   y ä§ `ÿÿÿÿP
+ÿÿÿúP4!P€€¨  ª´%õ˜           
+              Ó   ³´   ´  ´  ä   ´   äÁ   æL   én      u æL   éu  ¶   ä¾       u ´  ä¾    	   ;
+      Ä   3(   (>      >      Ä   3(   (   Ä   3(   ((   (   (   (>   u ´  äÁ  æL   é   Ä   3(   (u æL   éo   y äÁ  æL   éÁ  y äÔ§ “@`J`
+ÿÿÿøP
+PI`P(`
+%’ * ’ 	N&	&	KPH`
+ÿÿÿóP
+"ÿÿÿûPD`ÿÿÿùP%P€¨          ÿÿÿÿ$  «Åõo  ¬                        ³´   ´  ä¾    5u æL   é   u M´   ä   Ä   ¸   3(   (´  äÁ   æL   é   Á  y äÁ   æL   é	   
+   y ä¾       Á  3(u æL   é   u æL   é   y äÕ§ *`ÿÿÿÿPP*`— ` ÿÿÿíP$`EPD`ÿÿÿûPPP%P€$         «   ÿÿÿÿ3õØ  `q      `    p'  l                 `  `'    
+     Õ    =  ;  "  !    `  `=    !  †  ;    $     %  &  w     `  `&    /  %  
+  `  `  *  w     `  `  *  w     `&  A    `%  <  >  $  /    @î  0  ß  j   
+  p	  `w   $  /     @î  0  ß  j     p4  5  &  A    `†  ,     	  p  `P  Q  V  )  B    `  `$  F    G  <  H  I  J  K  =  L    M  N  O  P  Q  R  S    `U    p  `$  W  X  Y  Z  [  \  ]  ^  _  `  a  b  c  d  e    M  N    f  Ò  &  g  h  i    `  n    `u    `  `     p$  o    p  q  r  s  t    pP  Q  v  w     `u    `  `j  l    p  M  N    @z  {  |  }  ~    €  n    ‚  $  o  t    p  `  #  w     Ü     `‰  Š  !  `ƒ      `  `'    f  Y  …  $  ©   ‡    p‹  Œ      8	   t    p%  `  "  `#  `  ’  “    $  `U    p&  `  •  –   ˜  —  š  ™  œ    Ÿ       »  ¢  ¡  £  ¤  ¥  s  t  ¦  $  §  '  `$  ¨  ©  ƒ  +  `u  (  `)  `  P  Q  ª  $  ¬  ­  Á   ®    n    *  `U    p,  `-  `²  ´    €  $  µ  .  `  $  ¬  ­  ¶  ·  0  `1  `$  J   ¿  ß  À  Á  º  2  `3  `$  J   ¿  ß  À  Á  ¼  /  `$  ¸  J   ¹  º  »  ¼  ½    p   p5  `6  `$  X  Å  Æ  Ç  È  É  Ê  Ë    Ì  n      4  `$  Ã  t  "  p<  `8  &  8	  Ö  ;  `à     (  pB  `C  `D  `$    î    ï  ğ  ñ  ò  X  õ  P  Q  ó  ô  õ  1  ·  ¶  ­   ö  ©  @  `A  `À  å  æ  ç  • è    $  é  ê  ,  p?  `   +  pF  `G  `$  X  õ  P  Q  ó  ô  õ  1  ·  ¶  =  `  PÁ    f  Y  >  `l  *  p}    ¤    @z  |  {  ÷  ø  ù  ú    PE  `P  Q  û  $  ü    ı  ê  -  p  9  `:  `P  Q  Ú  &  o  Û  8	 İ  '  p)  p*  H  `7  `8  `Ö       PÁ    f  Y  Ù  Í  Â  &  p.  pI  `J  `  @$   ­   c    J     	  
+    °   ¹       K  `$   ©  N  `$     P  Q     L  `M  `P  Q   U  2  pR  `$  È  ! S  `$  È  ! O  `P  `$      Q  `­  §     4  p" R # $ 5  p& “   ' È  ( ) * + ©  a  , Y  X   - X  `   ¥  9 Y  ` 4 Z  `  ¥  8 õ  = > z     a  @ Y  A À    »  B  r  Ê      C U  `V  `   &  o  W  `1   @3  5 4   @6 7   @8 w      8  p: 9  pT  `  PÁ    f  Y    PÍ  Â  7  p[  `\  `  	  @'  
+  	              w              _  `P  Q  Ï  Ğ  ]  `   PÁ    f  Y  ^  `'  …  $  ©   ‡  $  p  PÒ  `  `a  `E Ô   F 1  G I   f  J d  `e  `  “ h  `f  `g  `    œ  § —  ß  ¨   © »  s  t  F  pi  `j  `M  ­   ® ¯ °   @± 8  ² ³ ´ µ ¶ k  `l  `m  `    ¹ Ü  º    » ¼ —  õ    î  ½ ¾   À Á Â Ã Ä Å Æ o  `¨   n  `Ç È   U  J  pp  `q  `  î      •  Ê —    £  r  `s  `  Y    R   [  S u  `  e h j f Ë  ™  g i ~  `  Ô   y |  `}  `$  £       w x ?  pz   a f  b   `  Ô   y €  ` ~  ƒ  `„  `‘ “ ” •     i  ©  ·  ˜ ™    š q $  “   › œ …  `†  `‘ $    › • ¡ œ £ ¤ ‡  `b  `c  `C  pE  pG  pH  pI  pK  p  M N   P   <  p.     š  T U [  S W X Y   @Z [ \ $  ]   ^ _ %  &  /  ` a f  Ò  b …  t  `d =  pk l v  `’  n w  `x  `  Ô   p y  `q G  z  `©    PÁ  Y  	  PÓ  
+  P  PF {  `l  >  p}  ¤    @{  ÷  $  £     w x @  pz | } t  A  p€  ‚ ƒ „ …   † ‡ 0  ˆ €  ‰ Š ‹   `9  B    ‚  `B  p Ÿ D  pË L  p‹  `Œ  `$  “   ) Õ â r   3   ã #  ä å ‘   ‰  `Š  `Í ‚    P_  Ğ $  Ò Ô   @Õ Ö  × 3   Ø Ù Ú Û Ü İ Ş È  “   ß à K O  p§  ˆ  `$    Ì N  p   `  p  p  p  p  p  p  p  p  p  p  p  p  p  p  p  p!  p%  p/  p0  p1  p3  p6  p     @  p    š      
+  @  $          9    @ƒ  Í  a  #  ps    :  pK ;  pM  pÿX„æ  3                                   æ       p             !                     #        '      '        F      *        -      ç     ! 7      ç     ! 2      è     ! _      B        Y      é     ! w      S        «      h        —      ê     ! ’      ë     ! •      ë     ! ©      ì     ! Â      j        Î      i         È      í     ! Ë      í     ! ã   "           á      î     !      ¦             u        
+     ï     !      ~        %     n        >             ,  	   ¾        5  	   Â        Y     ‚        I     Ä        ˆ     ó     ! ƒ     ô     ! Ì     Ó        ¾     õ     ! d     ß      !
+ ^     ÷     !       â      !
+      ù     !      ú     ! h     ë        ‘     ÿ        Ë     õ     ! Ú     Ù        õ     ú                    ù  	   ı     !              	     ş            ÿ       f  
+   .       P           ! 1          ! 6          ! —             ! @  t           ! ó  	           ! ü  
+           ! 
+          !           !           !              !              ¢     —       4             ! §     ¥       ¦          ! ¶     ª        Ç     ·       â     ¸       ß            è     «       ?             ! á             ! Ã             ! ´             ! H©À      ?«      ?«                €$  o    o  
+                  Ğ    Ğ                  ‘  .  ‘  .  "               ›  €  ‰  €  =               ”  Ô	  ‚  Ô	  D               ü	  ˜  Ö	  ˜  U   '          € O  á  ;  á  f               
+  Å  
+  Å  q              t  ˜  t  ˜  x               f  ˆ  f  ˆ               €  f  ı  f  £               ¦  Y  ¦  Y  Ë                †     h     Ô               2   Á(     Á(  ş               ^!  ¦&  ^!  ¦&    1            …!  2"  …!  2"                 A%  %  A%  %     %             ‚(  º(  ‚(  º(  >               â(  *  Ã(  *  D              D€f*  -  ?*  -  R  (             +  [+  +  [+  Z  5            ®,  -  ®,  -  f              9-  /2  -  /2  o              .  K.  .  K.  t               M2  2  12  2                »2  5  ’2  5  “  *            È4  5  È4  5  ©               K5  S8  5  S8  ¯  1            t8  š9  U8  š9  Â               À9  /<  œ9  /<  Ğ  %            É:  D;  ¨:  D;  ×  &           ­;  (<  ;  (<  ß  %           W<  9?  1<  9?  è  '            £<  5?  ‚<  5?  é  H           €e?  «A  e?  «A     +            ƒ@  ó@  ƒ@  ó@    1           ÕA  ;U  ¯A  ;U    '            C  ùT  C  ùT               µD  åE  µD  åE  &  )            (E  ÛE  (E  ÛE  (  '           
+F  ¥T  
+F  ¥T  1  #            LG  ĞN  LG  ĞN  5  9           {G  ÂN  {G  ÂN  6             +I  N  I  N  ?  @            R  îS  ßQ  îS  w  2             ÿT  4U  ÿT  4U                ZU  ëX  =U  ëX  ”               	Y  6Y  íX  6Y  µ             €#Z  	\  	Z  	\  »              ÛZ   \  ÛZ   \  Â              &\  \g  \  \g  Ì             b^  ^  Y^  ^  Ù              `  Y`  `  Y`  ä              èg  n  Êg  n                –h  n  –h  n  
+               –j  àj  –j  àj                 k  øm  k  øm    *            2n  şo  2n  şo  3            €,p  +¡  ,p  +¡  E  !             q  ³r  q  ³r  K              z    z    ’             …  “†  …  “†  à  -             ‘…  Ï…  ‘…  Ï…  ã              œ‡  Ú‡  œ‡  Ú‡  ò              ”Š  ‹  ”Š  ‹  ı  '            ’  •  „’  •  -              )•  £•  •  £•  A              ü•  Ï–  ü•  Ï–  H  #          € —  Ü˜  —  Ü˜  R              h˜   ˜  h˜   ˜  Y  &           @€™  /›  à˜  /›  _  (            W›  ¬  3›  ¬  p  '          €ÿ  Ÿ  æ  Ÿ  ‚              ´  Ÿ  «  Ÿ  ‡               aŸ  …   CŸ  …     !            Ó   ¡  Ó   ¡  ˜             ¢  çª  ¢  çª  ¡              ›¢  ãª  ›¢  ãª  ¢               t©  Åª  t©  Åª  µ  ,           5¡İYRš.%DtÄ`      i‰|›i‰|›I(æ’„ò·“   ‘    O^partitionKey=%28https%2Casu.edu%29,:https://instructure-uploads.s3.amazonaws.com/account_72360000000000001/attachments/114511420/canvas-prod.js strongly-framed 1 security-info FnhllAKWRHGAlo+ESXykKAAAAAAAAAAAwAAAAAAAAEaphjojH6pBabDSgSnsfLHeAAAAAgAAAAAAAAAAAAAAAAAAAAEAOQFmCjImkVxP+7sgiYWmMt8FvcOXmlQiTNWFiWlrbpbqgwAAAAAAAAg/MIIIOzCCByOgAwIBAgIQCHNhNIH5XVH5G3SANwHecTANBgkqhkiG9w0BAQsFADA8MQswCQYDVQQGEwJVUzEPMA0GA1UEChMGQW1hem9uMRwwGgYDVQQDExNBbWF6b24gUlNBIDIwNDggTTAxMB4XDTI1MDkxOTAwMDAwMFoXDTI2MDgyMzIzNTk1OVowGzEZMBcGA1UEAxMQczMuYW1hem9uYXdzLmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMdxOeavAJSP5sHcShN1qqDR2LF9RtWaXtp5bdgNNKlgt4buDh3fEGe60xX+RNSANTeyWtUZ8fhtQ7ugj7OoMZi+a2KczPFj3Q34OgM/8+290Z9joZ0pwkKNwY03qEO6vlr9E/qA0Y9A6xZBD6QNUmD7jR4Etqq7jtBFgocdjZ6bgMqGQ8UhSs5qapqokrKQrbKZLBHKRCqYGoKwgD1ciXiV6iXuJj+GXDmwte7MZAfFyg5OJnghGKNCMdU38AYRGrfTWoVH5RC67JlfZMenQBK9sB/XnrB3kOkRbBR/spRYsZg+mbaRQ7uyPL0hTHyDu1KAe8BpmxYoDrvkmkLPr58CAwEAAaOCBVgwggVUMB8GA1UdIwQYMBaAFIG4DmOKiRIY5fo7O1CVn+blkBOFMB0GA1UdDgQWBBSLsv8vDlH1xvXIpmJ3htLYjcrMszCCAokGA1UdEQSCAoAwggJ8ghBzMy5hbWF6b25hd3MuY29tghIqLnMzLmFtYXpvbmF3cy5jb22CKCouczMtYWNjZXNzcG9pbnQudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CJCouczMtY29udHJvbC51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYIkczMuZHVhbHN0YWNrLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tgicqLnMzLWRlcHJlY2F0ZWQudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CLHMzLWNvbnRyb2wuZHVhbHN0YWNrLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tgh0qLnMzLWV4dGVybmFsLTIuYW1hem9uYXdzLmNvbYIaczMudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CMiouczMtYWNjZXNzcG9pbnQuZHVhbHN0YWNrLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tghwqLnMzLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tgh0qLnMzLWV4dGVybmFsLTEuYW1hem9uYXdzLmNvbYImKi5zMy5kdWFsc3RhY2sudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CG3MzLWV4dGVybmFsLTIuYW1hem9uYXdzLmNvbYIiczMtY29udHJvbC51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYIbczMtZXh0ZXJuYWwtMS5hbWF6b25hd3MuY29tgiVzMy1kZXByZWNhdGVkLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tgi4qLnMzLWNvbnRyb2wuZHVhbHN0YWNrLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tMBMGA1UdIAQMMAowCAYGZ4EMAQIBMA4GA1UdDwEB/wQEAwIFoDAdBgNVHSUEFjAUBggrBgEFBQcDAQYIKwYBBQUHAwIwOwYDVR0fBDQwMjAwoC6gLIYqaHR0cDovL2NybC5yMm0wMS5hbWF6b250cnVzdC5jb20vcjJtMDEuY3JsMHUGCCsGAQUFBwEBBGkwZzAtBggrBgEFBQcwAYYhaHR0cDovL29jc3AucjJtMDEuYW1hem9udHJ1c3QuY29tMDYGCCsGAQUFBzAChipodHRwOi8vY3J0LnIybTAxLmFtYXpvbnRydXN0LmNvbS9yMm0wMS5jZXIwDAYDVR0TAQH/BAIwADCCAX0GCisGAQQB1nkCBAIEggFtBIIBaQFnAHYA2AlVO5RPev/IFhlvlE+Fq7D4/F6HVSYPFdEucrtFSxQAAAGZY2zFywAABAMARzBFAiEA52TfXblfxGMn7zs62yXq7rXB/ccKutSfyoReVaLtluACIFL9G5g8WzioAe/Tmx0cJjYXBzof9go+a5TjVIY4bpnnAHYAwjF+V0UZo0XufzjespBB68fCIVoiv3/Vta12mtkOUs0AAAGZY2zFywAABAMARzBFAiAdPbpyBei1fmph20ZWi1ZN7nl9b6EDX0s/gYxduL7kCQIhAMeQp4B56jeit+b3akK3MHyTQoZBgR2CZMBZI6QVk5DUAHUAlE5Dh/rswe+B8xkkJqgYZQHH0184AgE/cmd9VTcuGdgAAAGZY2zF4AAABAMARjBEAiBpEesssZJD0SnUOe2Alz/5nGHs/Usxgzgz/xrMmEAXwAIgI90hHJajlzg30MZC3RKkXV8wezmCpK+h+FLlSvMOUVowDQYJKoZIhvcNAQELBQADggEBAMMItDbq4GvNzuM8t2iBx90ZF0hcsivxMOHbbxvBRrLtEYjY5wyvmGdWF2t24YFaYzyEMb0qX0YLxLGpoJCf5vIJolRHHgdDdkxg354SVQ4+SB1SvpJlAjyzqAGD4XQHAU3t0+jK+9OfJp8Zh57Z3jzIzhA5ILi5hT3mW3hbHaNfvDpiauB6Sm9T0jc7853Msuh17LvABsIYlt2gVx48ivJcoLmsInswJM2kWvD8WGTc0sG0wQfT6GNxEGG9anP3odTgdPUNnm8OKqW8nabzmhfusMKmxp3ShPpT0KiO5gBlGsMkDKu0+xKB0QjGaRoRbFC/9f0if9jQX5Hiz/xxpS4TAQAEAAAAAAABAQAABQAAAA5tbGtlbTc2OHgyNTUxOQAAAA5SU0EtUFNTLVNIQTI1NgADZgoyJpFcT/u7IImFpjLfBb3Dl5pUIkzVhYlpa26W6oMAAAAAAAAIPzCCCDswggcjoAMCAQICEAhzYTSB+V1R+Rt0gDcB3nEwDQYJKoZIhvcNAQELBQAwPDELMAkGA1UEBhMCVVMxDzANBgNVBAoTBkFtYXpvbjEcMBoGA1UEAxMTQW1hem9uIFJTQSAyMDQ4IE0wMTAeFw0yNTA5MTkwMDAwMDBaFw0yNjA4MjMyMzU5NTlaMBsxGTAXBgNVBAMTEHMzLmFtYXpvbmF3cy5jb20wggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDHcTnmrwCUj+bB3EoTdaqg0dixfUbVml7aeW3YDTSpYLeG7g4d3xBnutMV/kTUgDU3slrVGfH4bUO7oI+zqDGYvmtinMzxY90N+DoDP/PtvdGfY6GdKcJCjcGNN6hDur5a/RP6gNGPQOsWQQ+kDVJg+40eBLaqu47QRYKHHY2em4DKhkPFIUrOamqaqJKykK2ymSwRykQqmBqCsIA9XIl4leol7iY/hlw5sLXuzGQHxcoOTiZ4IRijQjHVN/AGERq301qFR+UQuuyZX2THp0ASvbAf156wd5DpEWwUf7KUWLGYPpm2kUO7sjy9IUx8g7tSgHvAaZsWKA675JpCz6+fAgMBAAGjggVYMIIFVDAfBgNVHSMEGDAWgBSBuA5jiokSGOX6OztQlZ/m5ZAThTAdBgNVHQ4EFgQUi7L/Lw5R9cb1yKZid4bS2I3KzLMwggKJBgNVHREEggKAMIICfIIQczMuYW1hem9uYXdzLmNvbYISKi5zMy5hbWF6b25hd3MuY29tgigqLnMzLWFjY2Vzc3BvaW50LnVzLWVhc3QtMS5hbWF6b25hd3MuY29tgiQqLnMzLWNvbnRyb2wudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CJHMzLmR1YWxzdGFjay51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYInKi5zMy1kZXByZWNhdGVkLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tgixzMy1jb250cm9sLmR1YWxzdGFjay51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYIdKi5zMy1leHRlcm5hbC0yLmFtYXpvbmF3cy5jb22CGnMzLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tgjIqLnMzLWFjY2Vzc3BvaW50LmR1YWxzdGFjay51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYIcKi5zMy51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYIdKi5zMy1leHRlcm5hbC0xLmFtYXpvbmF3cy5jb22CJiouczMuZHVhbHN0YWNrLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tghtzMy1leHRlcm5hbC0yLmFtYXpvbmF3cy5jb22CInMzLWNvbnRyb2wudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CG3MzLWV4dGVybmFsLTEuYW1hem9uYXdzLmNvbYIlczMtZGVwcmVjYXRlZC51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYIuKi5zMy1jb250cm9sLmR1YWxzdGFjay51cy1lYXN0LTEuYW1hem9uYXdzLmNvbTATBgNVHSAEDDAKMAgGBmeBDAECATAOBgNVHQ8BAf8EBAMCBaAwHQYDVR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMDsGA1UdHwQ0MDIwMKAuoCyGKmh0dHA6Ly9jcmwu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LmFtYXpvbmF3cy5jb22CJyouczMtZGVwcmVjYXRlZC51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYIsczMtY29udHJvbC5kdWFsc3RhY2sudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CHSouczMtZXh0ZXJuYWwtMi5hbWF6b25hd3MuY29tghpzMy51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYIyKi5zMy1hY2Nlc3Nwb2ludC5kdWFsc3RhY2sudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CHCouczMudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CHSouczMtZXh0ZXJuYWwtMS5hbWF6b25hd3MuY29tgiYqLnMzLmR1YWxzdGFjay51cy1lYXN0LTEuYW1hem9uYXdzLmNvbYIbczMtZXh0ZXJuYWwtMi5hbWF6b25hd3MuY29tgiJzMy1jb250cm9sLnVzLWVhc3QtMS5hbWF6b25hd3MuY29tghtzMy1leHRlcm5hbC0xLmFtYXpvbmF3cy5jb22CJXMzLWRlcHJlY2F0ZWQudXMtZWFzdC0xLmFtYXpvbmF3cy5jb22CLiouczMtY29udHJvbC5kdWFsc3RhY2sudXMtZWFzdC0xLmFtYXpvbmF3cy5jb20wEwYDVR0gBAwwCjAIBgZngQwBAgEwDgYDVR0PAQH/BAQDAgWgMB0GA1UdJQQWMBQGCCsGAQUFBwMBBggrBgEFBQcDAjA7BgNVHR8ENDAyMDCgLqAshipodHRwOi8vY3JsLnIybTAxLmFtYXpvbnRydXN0LmNvbS9yMm0wMS5jcmwwdQYIKwYBBQUHAQEEaTBnMC0GCCsGAQUFBzABhiFodHRwOi8vb2NzcC5yMm0wMS5hbWF6b250cnVzdC5jb20wNgYIKwYBBQUHMAKGKmh0dHA6Ly9jcnQucjJtMDEuYW1hem9udHJ1c3QuY29tL3IybTAxLmNlcjAMBgNVHRMBAf8EAjAAMIIBfQYKKwYBBAHWeQIEAgSCAW0EggFpAWcAdgDYCVU7lE96/8gWGW+UT4WrsPj8XodVJg8V0S5yu0VLFAAAAZljbMXLAAAEAwBHMEUCIQDnZN9duV/EYyfvOzrbJerutcH9xwq61J/KhF5Vou2W4AIgUv0bmDxbOKgB79ObHRwmNhcHOh/2Cj5rlONUhjhu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 request-method GET response-head HTTP/1.1 200 OK
+x-amz-id-2: 8mwdU6EVsvliyKbnHPUYCBh56pwEE6NhcbQjsp8UKpo4+aTI3T/4CFRawlGcT4IOSscPaeCyQVg=
+x-amz-request-id: ZGD0WTDJMQFZXSGP
+Date: Mon, 26 Jan 2026 04:21:48 GMT
+Last-Modified: Fri, 05 Sep 2025 23:07:01 GMT
+ETag: "fd6c3620f9d87bf17433fa154e936ebe"
+x-amz-server-side-encryption: AES256
+Cache-Control: Cache-Control:max-age=473354280, public
+Expires: Wed, 05 Sep 2040 23:07:00 GMT
+x-amz-version-id: ySxwAogBTF_s8DpPq0aCWj3cdHJkgv3W
+Accept-Ranges: bytes
+Content-Type: application/x-javascript
+Content-Length: 43839
+Server: AmazonS3
+ original-response-headers x-amz-id-2: 8mwdU6EVsvliyKbnHPUYCBh56pwEE6NhcbQjsp8UKpo4+aTI3T/4CFRawlGcT4IOSscPaeCyQVg=
+x-amz-request-id: ZGD0WTDJMQFZXSGP
+Date: Mon, 26 Jan 2026 04:21:48 GMT
+Last-Modified: Fri, 05 Sep 2025 23:07:01 GMT
+ETag: "fd6c3620f9d87bf17433fa154e936ebe"
+x-amz-server-side-encryption: AES256
+Cache-Control: Cache-Control:max-age=473354280, public
+Expires: Wed, 05 Sep 2040 23:07:00 GMT
+x-amz-version-id: ySxwAogBTF_s8DpPq0aCWj3cdHJkgv3W
+Accept-Ranges: bytes
+Content-Type: application/x-javascript
+Content-Length: 43839
+Server: AmazonS3
+ ctid 2 net-response-time-onstart 534 net-response-time-onstop 663 alt-data 1;43839,javascript/moz-script-bytecode-20251211130204-8l alt-data-from-child 1  J?
